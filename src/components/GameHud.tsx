@@ -89,26 +89,26 @@ export const GameHud: React.FC<GameHudProps> = ({
   };
 
   return (
-    <div className="pointer-events-none fixed inset-0 z-20 flex flex-col justify-between p-2.5 sm:p-4">
+    <div className="pointer-events-none absolute inset-0 z-20 flex flex-col justify-between p-2.5 sm:p-3">
       {/* Top Perimeter Strip: Instagram Link + Turn Banner + Utility Buttons */}
       <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="flex flex-col items-start gap-1.5">
+        <div className="flex flex-col items-start gap-1">
           <InstagramBadge compact />
           {roomCode && !roomCode.startsWith('GLB-') && (
-            <div className="pointer-events-auto rounded-lg border border-[#d4af37]/35 bg-[#121a24]/92 px-2.5 py-1 text-xs text-[#d8d1c2]">
-              Room: <span className="font-mono-num font-bold text-[#f3cf68]">{roomCode}</span>
+            <div className="pointer-events-auto rounded-lg border border-[#facc15]/45 bg-[#0d1d35]/95 px-2.5 py-1 text-xs text-[#e2e8f0] shadow">
+              Room: <span className="font-mono-num font-bold text-[#fde047]">{roomCode}</span>
             </div>
           )}
         </div>
 
         {/* Active Turn Banner */}
-        <div className="order-last w-full sm:order-none sm:w-auto">
-          <div className="mx-auto flex max-w-md items-center justify-center gap-2.5 rounded-xl border border-white/15 bg-[#121a24]/92 px-4 py-2 text-xs sm:text-sm">
+        <div className="order-last w-full">
+          <div className="mx-auto flex items-center justify-center gap-2 rounded-xl border border-[#facc15]/35 bg-[#0d1d35]/95 px-3.5 py-1.5 text-xs shadow-md">
             <span
-              className="h-3 w-3 shrink-0 rounded-full border border-white/40"
+              className="h-3 w-3 shrink-0 rounded-full border border-white/50"
               style={{ backgroundColor: COLOR_HEX[currentColor] }}
             />
-            <span className="truncate font-semibold text-[#f4f1ea]">{gameState.lastEventText}</span>
+            <span className="truncate font-semibold text-[#ffffff]">{gameState.lastEventText}</span>
           </div>
         </div>
 
@@ -121,24 +121,25 @@ export const GameHud: React.FC<GameHudProps> = ({
               soundEngine.playClick();
               onToggleMusic();
             }}
-            className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/15 bg-[#121a24]/92 text-[#f4f1ea] hover:border-[#d4af37]"
+            className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#facc15]/35 bg-[#0d1d35]/95 text-[#f8fafc] shadow hover:border-[#fde047]"
           >
             {settings.musicEnabled ? (
-              <Music className="h-4 w-4 text-[#f3cf68]" />
+              <Music className="h-4 w-4 text-[#fde047]" />
             ) : (
               <VolumeX className="h-4 w-4 text-[#94a3b8]" />
             )}
           </button>
           <button
             type="button"
-            aria-label="Toggle Camera View"
+            aria-label={settings.cameraMode === 'angled' ? 'Switch to Top Drone View' : 'Switch to 3D Drone View'}
+            title={settings.cameraMode === 'angled' ? 'Drone View: 3D (Tap for Top)' : 'Drone View: Top (Tap for 3D)'}
             onClick={() => {
               soundEngine.playClick();
               onToggleCamera();
             }}
-            className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/15 bg-[#121a24]/92 text-[#f4f1ea] hover:border-[#d4af37]"
+            className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#facc15]/35 bg-[#0d1d35]/95 text-[#f8fafc] shadow hover:border-[#fde047]"
           >
-            <Camera className="h-4 w-4 text-[#cbd5e1]" />
+            <Camera className="h-4 w-4 text-[#e2e8f0]" />
           </button>
           <button
             type="button"
@@ -147,9 +148,9 @@ export const GameHud: React.FC<GameHudProps> = ({
               soundEngine.playClick();
               onOpenLeaderboard();
             }}
-            className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/15 bg-[#121a24]/92 text-[#f4f1ea] hover:border-[#d4af37]"
+            className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#facc15]/35 bg-[#0d1d35]/95 text-[#f8fafc] shadow hover:border-[#fde047]"
           >
-            <Trophy className="h-4 w-4 text-[#f3cf68]" />
+            <Trophy className="h-4 w-4 text-[#fde047]" />
           </button>
           <button
             type="button"
@@ -158,9 +159,9 @@ export const GameHud: React.FC<GameHudProps> = ({
               soundEngine.playClick();
               onOpenSettings();
             }}
-            className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/15 bg-[#121a24]/92 text-[#f4f1ea] hover:border-[#d4af37]"
+            className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#facc15]/35 bg-[#0d1d35]/95 text-[#f8fafc] shadow hover:border-[#fde047]"
           >
-            <Settings className="h-4 w-4 text-[#cbd5e1]" />
+            <Settings className="h-4 w-4 text-[#e2e8f0]" />
           </button>
           <button
             type="button"
@@ -169,9 +170,9 @@ export const GameHud: React.FC<GameHudProps> = ({
               soundEngine.playClick();
               onTogglePause();
             }}
-            className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/15 bg-[#121a24]/92 text-[#f4f1ea] hover:border-[#d4af37]"
+            className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#facc15]/35 bg-[#0d1d35]/95 text-[#f8fafc] shadow hover:border-[#fde047]"
           >
-            <Pause className="h-4 w-4 text-[#f4f1ea]" />
+            <Pause className="h-4 w-4 text-[#f8fafc]" />
           </button>
         </div>
       </div>
@@ -182,13 +183,9 @@ export const GameHud: React.FC<GameHudProps> = ({
         {(() => {
           const activeColors = ALL_COLORS.filter((c) => gameState.players[c].isActive);
           const gridCols =
-            activeColors.length <= 2
-              ? 'max-w-lg grid-cols-2'
-              : activeColors.length === 3
-                ? 'max-w-2xl grid-cols-3'
-                : 'max-w-3xl grid-cols-2 sm:grid-cols-4';
+            activeColors.length === 3 ? 'grid-cols-3' : 'grid-cols-2';
           return (
-            <div className={`mx-auto grid w-full gap-1.5 sm:gap-2 ${gridCols}`}>
+            <div className={`mx-auto grid w-full gap-1.5 ${gridCols}`}>
               {activeColors.map((color) => {
                 const p = gameState.players[color];
                 const isTurn = color === currentColor && gameState.turnPhase !== 'finished';
@@ -261,12 +258,12 @@ export const GameHud: React.FC<GameHudProps> = ({
         )}
 
         {/* Action Dock: Roll Dice or Quick-Select Highlighted Token */}
-        <div className="pointer-events-auto mx-auto flex flex-wrap items-center justify-center gap-2.5 rounded-2xl border border-[#d4af37]/35 bg-[#121a24]/95 px-4 py-2.5 shadow-xl">
+        <div className="pointer-events-auto mx-auto flex flex-wrap items-center justify-center gap-2.5 rounded-2xl border border-[#facc15]/45 bg-gradient-to-b from-[#132645]/95 to-[#0c182d]/95 px-4 py-2 shadow-xl">
           <div className="flex items-center gap-2 pr-1">
-            <span className="text-xs font-medium text-[#a9b3c1]">Dice:</span>
+            <span className="text-xs font-medium text-[#cbd5e1]">Dice:</span>
             <span
               data-testid="hud-dice-value"
-              className="font-mono-num flex h-9 w-9 items-center justify-center rounded-lg border border-[#d4af37]/40 bg-[#0e141b] text-lg font-extrabold text-[#f3cf68]"
+              className="font-mono-num flex h-9 w-9 items-center justify-center rounded-lg border border-[#facc15]/50 bg-[#081326] text-lg font-extrabold text-[#fde047]"
             >
               {diceRollingVisual ? '...' : gameState.diceValue ?? '—'}
             </span>
@@ -277,7 +274,7 @@ export const GameHud: React.FC<GameHudProps> = ({
               type="button"
               data-testid="roll-dice-btn"
               onClick={onRollDice}
-              className="min-h-[44px] rounded-xl bg-[#d4af37] px-6 py-2 text-sm font-extrabold text-[#11161d] shadow transition hover:bg-[#e5c14d] active:scale-[0.97]"
+              className="min-h-[42px] rounded-xl border border-[#fef08a]/70 bg-gradient-to-b from-[#fde047] via-[#eab308] to-[#b45309] px-6 py-2 text-sm font-extrabold text-[#0f172a] shadow-lg transition hover:brightness-110 active:scale-[0.97]"
             >
               Roll Dice
             </button>
@@ -319,7 +316,7 @@ export const GameHud: React.FC<GameHudProps> = ({
           role="dialog"
           aria-modal="true"
           aria-labelledby="pause-title"
-          className="pointer-events-auto fixed inset-0 z-40 flex items-center justify-center bg-black/75 p-4"
+          className="pointer-events-auto absolute inset-0 z-40 flex items-center justify-center bg-black/75 p-4"
         >
           <div className="w-full max-w-sm rounded-2xl border border-[#d4af37]/40 bg-[#151e29] p-6 text-center shadow-2xl">
             <h2 id="pause-title" className="font-display text-2xl font-bold text-[#f4f1ea]">
@@ -375,7 +372,7 @@ export const GameHud: React.FC<GameHudProps> = ({
           role="dialog"
           aria-modal="true"
           aria-labelledby="victory-title"
-          className="pointer-events-auto fixed inset-0 z-40 flex items-center justify-center bg-black/75 p-4"
+          className="pointer-events-auto absolute inset-0 z-40 flex items-center justify-center bg-black/75 p-4"
         >
           <div className="w-full max-w-md rounded-2xl border border-[#d4af37]/50 bg-[#151e29] p-6 text-center shadow-2xl">
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#d4af37]/20 text-[#f3cf68]">

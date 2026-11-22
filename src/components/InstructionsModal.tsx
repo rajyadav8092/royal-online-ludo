@@ -26,9 +26,9 @@ export const InstructionsModal: React.FC<InstructionsModalProps> = ({
       role="dialog"
       aria-modal="true"
       aria-labelledby="instructions-title"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4"
+      className="absolute inset-0 z-50 flex items-center justify-center bg-black/75 p-3.5"
     >
-      <div className="w-full max-w-lg rounded-2xl border border-[#d4af37]/35 bg-[#151e29] p-6 shadow-2xl">
+      <div className="custom-scroll max-h-[88vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-[#d4af37]/35 bg-[#151e29] p-5 shadow-2xl">
         <div className="flex items-center gap-3 border-b border-white/10 pb-4">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#d4af37]/15 text-[#f3cf68]">
             <BookOpen className="h-5 w-5" />

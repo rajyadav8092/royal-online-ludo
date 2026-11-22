@@ -117,7 +117,7 @@ function createFeltTextures(): { map: THREE.CanvasTexture; bump: THREE.CanvasTex
   bumpCanvas.height = size;
   const bCtx = bumpCanvas.getContext('2d')!;
 
-  cCtx.fillStyle = '#112a22';
+  cCtx.fillStyle = '#0e362c';
   cCtx.fillRect(0, 0, size, size);
   bCtx.fillStyle = '#808080';
   bCtx.fillRect(0, 0, size, size);
@@ -126,7 +126,7 @@ function createFeltTextures(): { map: THREE.CanvasTexture; bump: THREE.CanvasTex
     const x = Math.random() * size;
     const y = Math.random() * size;
     const light = Math.random() > 0.5;
-    cCtx.fillStyle = light ? 'rgba(30, 74, 58, 0.35)' : 'rgba(8, 22, 17, 0.35)';
+    cCtx.fillStyle = light ? 'rgba(34, 96, 76, 0.35)' : 'rgba(6, 26, 20, 0.35)';
     cCtx.fillRect(x, y, 2, 2);
     bCtx.fillStyle = light ? 'rgba(200,200,200,0.4)' : 'rgba(70,70,70,0.4)';
     bCtx.fillRect(x, y, 2, 2);
@@ -144,43 +144,44 @@ function createFeltTextures(): { map: THREE.CanvasTexture; bump: THREE.CanvasTex
 }
 
 function createBoardTexture(): THREE.CanvasTexture {
-  const size = 1024;
+  const size = 2048;
   const cell = size / 15;
   const canvas = document.createElement('canvas');
   canvas.width = size;
   canvas.height = size;
   const ctx = canvas.getContext('2d')!;
 
-  ctx.fillStyle = '#f8f4ea';
+  ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, size, size);
 
   const colors = {
-    red: '#d93838',
-    redLight: '#fde8e8',
-    green: '#1e9e52',
-    greenLight: '#e3f7eb',
-    yellow: '#e6a817',
-    yellowLight: '#fef6db',
-    blue: '#235ee0',
-    blueLight: '#e5eeff',
-    gold: '#c89b3c',
+    red: '#dc2626',
+    redLight: '#fee2e2',
+    green: '#15803d',
+    greenLight: '#dcfce7',
+    yellow: '#eab308',
+    yellowLight: '#fef9c3',
+    blue: '#1d4ed8',
+    blueLight: '#dbeafe',
+    gold: '#ca8a04',
+    line: '#0f172a',
   };
 
   for (let r = 0; r < 15; r++) {
     for (let c = 0; c < 15; c++) {
-      ctx.fillStyle = (r + c) % 2 === 0 ? '#fbf8f1' : '#f2ecde';
+      ctx.fillStyle = (r + c) % 2 === 0 ? '#f8fafc' : '#e8eef5';
       ctx.fillRect(c * cell, r * cell, cell, cell);
-      ctx.strokeStyle = 'rgba(45, 38, 32, 0.22)';
-      ctx.lineWidth = 2;
+      ctx.strokeStyle = colors.line;
+      ctx.lineWidth = 6;
       ctx.strokeRect(c * cell, r * cell, cell, cell);
     }
   }
 
   const drawColoredCell = (r: number, c: number, fill: string) => {
     ctx.fillStyle = fill;
-    ctx.fillRect(c * cell + 2, r * cell + 2, cell - 4, cell - 4);
-    ctx.strokeStyle = 'rgba(20, 18, 15, 0.28)';
-    ctx.lineWidth = 2;
+    ctx.fillRect(c * cell + 3, r * cell + 3, cell - 6, cell - 6);
+    ctx.strokeStyle = colors.line;
+    ctx.lineWidth = 6;
     ctx.strokeRect(c * cell, r * cell, cell, cell);
   };
 
@@ -203,12 +204,12 @@ function createBoardTexture(): THREE.CanvasTexture {
     ctx.save();
     ctx.translate((s.c + 0.5) * cell, (s.r + 0.5) * cell);
     ctx.rotate(s.angle);
-    ctx.fillStyle = 'rgba(255,255,255,0.92)';
+    ctx.fillStyle = '#ffffff';
     ctx.beginPath();
-    ctx.moveTo(cell * 0.24, 0);
-    ctx.lineTo(-cell * 0.14, -cell * 0.2);
+    ctx.moveTo(cell * 0.25, 0);
+    ctx.lineTo(-cell * 0.14, -cell * 0.21);
     ctx.lineTo(-cell * 0.06, 0);
-    ctx.lineTo(-cell * 0.14, cell * 0.2);
+    ctx.lineTo(-cell * 0.14, cell * 0.21);
     ctx.closePath();
     ctx.fill();
     ctx.restore();
@@ -228,16 +229,16 @@ function createBoardTexture(): THREE.CanvasTexture {
     ctx.closePath();
     ctx.fillStyle = fill;
     ctx.fill();
-    ctx.strokeStyle = 'rgba(45, 38, 32, 0.35)';
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = colors.line;
+    ctx.lineWidth = 4;
     ctx.stroke();
     ctx.restore();
   };
 
   for (const idx of STAR_TRACK_INDICES) {
     const [r, c] = MAIN_TRACK_COORDS[idx];
-    drawColoredCell(r, c, '#efe7d2');
-    drawStar((c + 0.5) * cell, (r + 0.5) * cell, cell * 0.32, cell * 0.14, '#c89b3c');
+    drawColoredCell(r, c, '#fef3c7');
+    drawStar((c + 0.5) * cell, (r + 0.5) * cell, cell * 0.34, cell * 0.15, '#eab308');
   }
 
   const drawYardExact = (
@@ -253,18 +254,18 @@ function createBoardTexture(): THREE.CanvasTexture {
 
     ctx.fillStyle = mainColor;
     ctx.fillRect(x, y, w, w);
-    ctx.strokeStyle = '#2d2620';
-    ctx.lineWidth = 6;
-    ctx.strokeRect(x + 3, y + 3, w - 6, w - 6);
+    ctx.strokeStyle = colors.line;
+    ctx.lineWidth = 12;
+    ctx.strokeRect(x + 6, y + 6, w - 12, w - 12);
 
     const pad = cell * 0.72;
     const innerW = w - pad * 2;
-    ctx.fillStyle = '#fcf9f2';
+    ctx.fillStyle = '#f8fafc';
     ctx.beginPath();
     ctx.roundRect(x + pad, y + pad, innerW, innerW, cell * 0.42);
     ctx.fill();
-    ctx.strokeStyle = colors.gold;
-    ctx.lineWidth = 5;
+    ctx.strokeStyle = colors.line;
+    ctx.lineWidth = 7;
     ctx.stroke();
 
     for (const [r, c] of yardCenters) {
@@ -274,14 +275,14 @@ function createBoardTexture(): THREE.CanvasTexture {
       ctx.arc(cx, cy, cell * 0.58, 0, Math.PI * 2);
       ctx.fillStyle = lightColor;
       ctx.fill();
-      ctx.lineWidth = 6;
+      ctx.lineWidth = 9;
       ctx.strokeStyle = mainColor;
       ctx.stroke();
 
       ctx.beginPath();
       ctx.arc(cx, cy, cell * 0.25, 0, Math.PI * 2);
       ctx.fillStyle = mainColor;
-      ctx.globalAlpha = 0.25;
+      ctx.globalAlpha = 0.35;
       ctx.fill();
       ctx.globalAlpha = 1;
     }
@@ -327,8 +328,8 @@ function createBoardTexture(): THREE.CanvasTexture {
     ctx.closePath();
     ctx.fillStyle = fill;
     ctx.fill();
-    ctx.strokeStyle = '#2d2620';
-    ctx.lineWidth = 4;
+    ctx.strokeStyle = colors.line;
+    ctx.lineWidth = 8;
     ctx.stroke();
   };
 
@@ -339,16 +340,19 @@ function createBoardTexture(): THREE.CanvasTexture {
 
   ctx.beginPath();
   ctx.arc(cx, cy, cell * 0.56, 0, Math.PI * 2);
-  ctx.fillStyle = '#fdf8eb';
+  ctx.fillStyle = '#ffffff';
   ctx.fill();
-  ctx.lineWidth = 6;
+  ctx.lineWidth = 8;
   ctx.strokeStyle = colors.gold;
   ctx.stroke();
 
-  drawStar(cx, cy, cell * 0.36, cell * 0.16, colors.gold);
+  drawStar(cx, cy, cell * 0.36, cell * 0.16, '#eab308');
 
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  tex.generateMipmaps = true;
   return tex;
 }
 
@@ -489,26 +493,23 @@ export const LudoScene3D: React.FC<LudoSceneProps> = (props) => {
     })();
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color('#0b1118');
-    scene.fog = new THREE.FogExp2('#0b1118', 0.018);
+    scene.background = new THREE.Color('#0a182e');
+    // Zero fog so the board and grid lines stay 100% crisp, bright, and free of haze at every distance
+    scene.fog = null;
 
     const width = container.clientWidth || window.innerWidth;
     const height = container.clientHeight || window.innerHeight;
     const isInitialTitle = propsRef.current.screenPhase === 'title';
-    const isInitialPortrait = width / height < 0.95;
-    const camera = new THREE.PerspectiveCamera(40, width / height, 0.1, 150);
+    const initAspect = width / Math.max(height, 1);
+    const camera = new THREE.PerspectiveCamera(40, initAspect, 0.1, 150);
     if (isInitialTitle) {
-      camera.position.set(
-        isInitialPortrait ? 0 : -5.6,
-        isInitialPortrait ? 18 : 13.5,
-        isInitialPortrait ? 26 : 19.5
-      );
-      camera.lookAt(isInitialPortrait ? 0 : -5.2, 0, isInitialPortrait ? 1.5 : 0);
+      const titleRadius = Math.max(25.5, 8.6 / (0.36397 * initAspect));
+      camera.position.set(0, titleRadius * 0.68, titleRadius * 0.74);
+      camera.lookAt(0, 0, 0.25);
     } else {
-      const initAspect = width / Math.max(height, 1);
-      const dist = Math.max(24.0, 7.6 / (0.36397 * initAspect));
-      camera.position.set(0, dist * 0.82, dist * 0.57);
-      camera.lookAt(0, 0, 0);
+      const dist = Math.max(25.5, 8.65 / (0.36397 * initAspect));
+      camera.position.set(0, dist * 0.84, dist * 0.48);
+      camera.lookAt(0, 0, 0.5);
     }
 
     const renderer = new THREE.WebGLRenderer({
@@ -518,7 +519,7 @@ export const LudoScene3D: React.FC<LudoSceneProps> = (props) => {
     });
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.1;
+    renderer.toneMappingExposure = 1.02;
     renderer.setPixelRatio(isSoftwareGl ? 1 : Math.min(window.devicePixelRatio, 2));
     renderer.setSize(width, height);
     renderer.shadowMap.enabled = !isSoftwareGl;
@@ -534,11 +535,12 @@ export const LudoScene3D: React.FC<LudoSceneProps> = (props) => {
     scene.environment = envTex;
     pmremGenerator.dispose();
 
-    const hemiLight = new THREE.HemisphereLight('#cfe0f5', '#2a1d14', 0.92);
+    // Balanced studio lighting: bright & crisp without washing out whites or glaring in Top Drone View
+    const hemiLight = new THREE.HemisphereLight('#f8fafc', '#261a10', 0.72);
     scene.add(hemiLight);
 
-    const keyLight = new THREE.DirectionalLight('#fff2dc', 1.9);
-    keyLight.position.set(8, 16, 8);
+    const keyLight = new THREE.DirectionalLight('#fffaf0', 1.38);
+    keyLight.position.set(-10, 17, 11);
     keyLight.castShadow = !isSoftwareGl;
     keyLight.shadow.mapSize.width = 1024;
     keyLight.shadow.mapSize.height = 1024;
@@ -553,8 +555,8 @@ export const LudoScene3D: React.FC<LudoSceneProps> = (props) => {
     keyLight.shadow.normalBias = 0.02;
     scene.add(keyLight);
 
-    const rimLight = new THREE.DirectionalLight('#7bb3ff', 0.6);
-    rimLight.position.set(-10, 8, -9);
+    const rimLight = new THREE.DirectionalLight('#93c5fd', 0.58);
+    rimLight.position.set(11, 12, -10);
     scene.add(rimLight);
 
     const disposables: Array<{ dispose: () => void }> = [];
@@ -655,15 +657,18 @@ export const LudoScene3D: React.FC<LudoSceneProps> = (props) => {
     });
     disposables.push(cornerGeo, rivetGeo);
 
-    // 5. Ludo Playfield Top Plate
+    // 5. Ludo Playfield Top Plate (Crisp 2048px Satin-Gloss Finish with zero overhead glare)
     const boardTex = createBoardTexture();
-    boardTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    boardTex.anisotropy = Math.min(16, renderer.capabilities.getMaxAnisotropy());
     const surfaceGeo = new THREE.BoxGeometry(BOARD_WORLD_SIZE, 0.06, BOARD_WORLD_SIZE);
-    const surfaceMat = new THREE.MeshStandardMaterial({
+    const surfaceMat = new THREE.MeshPhysicalMaterial({
       color: '#ffffff',
       map: boardTex,
-      roughness: 0.34,
-      metalness: 0.05,
+      roughness: 0.48,
+      metalness: 0.0,
+      clearcoat: 0.24,
+      clearcoatRoughness: 0.28,
+      envMapIntensity: 0.14,
     });
     const surfaceMesh = new THREE.Mesh(surfaceGeo, surfaceMat);
     surfaceMesh.position.y = 0.21;
@@ -1000,17 +1005,14 @@ export const LudoScene3D: React.FC<LudoSceneProps> = (props) => {
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
       renderer.setSize(w, h);
+      renderer.render(scene, camera);
     };
     const resizeObserver = new ResizeObserver(handleResize);
     resizeObserver.observe(container);
 
     const _camTargetPos = new THREE.Vector3();
     const _camLookAt = new THREE.Vector3();
-    const _currentLookAt = new THREE.Vector3(
-      isInitialTitle ? (isInitialPortrait ? 0 : -5.2) : 0,
-      0,
-      isInitialTitle ? (isInitialPortrait ? 1.5 : 0) : 0
-    );
+    const _currentLookAt = new THREE.Vector3(0, 0, isInitialTitle ? 0.4 : 0.75);
     const _tmpVec = new THREE.Vector3();
     const _dummy = new THREE.Object3D();
     const startTimeMs = performance.now();
@@ -1050,29 +1052,29 @@ export const LudoScene3D: React.FC<LudoSceneProps> = (props) => {
       const elapsed = (nowMs - startTimeMs) / 1000;
       const p = propsRef.current;
 
-      const aspect = camera.aspect || 1;
-      const isPortrait = aspect < 0.95;
+      const aspect = camera.aspect || 0.55;
 
-      // Camera Choreography (symmetric board + top/bottom corner dice pedestals!)
+      // Drone Camera Choreography (Centered in Mobile-Aspect Viewport across all screens)
       if (p.screenPhase === 'title') {
-        const orbitAngle = elapsed * 0.16;
-        const radius = isPortrait ? Math.max(26, 8.35 / (0.36397 * aspect)) : 19.5;
-        const offsetX = isPortrait ? 0 : -5.6;
+        const orbitAngle = elapsed * 0.22;
+        const radius = Math.max(25.5, 8.6 / (0.36397 * aspect));
         _camTargetPos.set(
-          Math.sin(orbitAngle) * radius * 0.45 + offsetX,
-          isPortrait ? radius * 0.72 : 13.5,
-          Math.cos(orbitAngle) * radius
+          Math.sin(orbitAngle) * radius * 0.34,
+          radius * 0.68,
+          Math.cos(orbitAngle) * radius * 0.74
         );
-        _camLookAt.set(isPortrait ? 0 : -5.2, 0, isPortrait ? 1.5 : 0);
+        _camLookAt.set(0, 0, 0.25);
       } else {
-        // Fit width 13.7 + margin AND top+bottom corner pedestals (-8.2 to +8.2) cleanly above bottom HUD
-        const fitDist = Math.max(25.5, 8.35 / (0.36397 * aspect));
+        // Fit full 13.7 board width + all 4 corner dice pedestals cleanly between HUD bars
+        const fitDist = Math.max(25.5, 8.65 / (0.36397 * aspect));
         if (p.cameraMode === 'top') {
-          _camTargetPos.set(0, fitDist * 0.98, fitDist * 0.08);
-          _camLookAt.set(0, 0, 0.4);
+          // Overhead Tactical Drone View
+          _camTargetPos.set(0, fitDist * 0.99, fitDist * 0.08);
+          _camLookAt.set(0, 0, 0.35);
         } else {
-          _camTargetPos.set(0, fitDist * 0.82, fitDist * 0.56);
-          _camLookAt.set(0, 0, 0.7);
+          // Cinematic 3D Angled Drone View
+          _camTargetPos.set(0, fitDist * 0.84, fitDist * 0.48);
+          _camLookAt.set(0, 0, 0.55);
         }
       }
 
@@ -1308,7 +1310,7 @@ export const LudoScene3D: React.FC<LudoSceneProps> = (props) => {
     <div
       ref={mountRef}
       data-testid="ludo-3d-canvas"
-      className="fixed inset-0 w-full h-full overflow-hidden"
+      className="absolute inset-0 w-full h-full overflow-hidden"
     />
   );
 };

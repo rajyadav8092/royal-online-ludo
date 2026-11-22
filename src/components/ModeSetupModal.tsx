@@ -149,9 +149,9 @@ export const ModeSetupModal: React.FC<ModeSetupModalProps> = ({
       role="dialog"
       aria-modal="true"
       aria-labelledby="setup-modal-title"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4"
+      className="absolute inset-0 z-50 flex items-center justify-center bg-black/75 p-3.5"
     >
-      <div className="custom-scroll max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-[#d4af37]/35 bg-[#151e29] p-6 shadow-2xl">
+      <div className="custom-scroll max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-[#d4af37]/35 bg-[#151e29] p-4 sm:p-5 shadow-2xl">
         <div className="flex items-center justify-between border-b border-white/10 pb-4">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#d4af37]/15 text-[#f3cf68]">
@@ -192,18 +192,18 @@ export const ModeSetupModal: React.FC<ModeSetupModalProps> = ({
 
         {/* MODE 1: COMPUTER (1, 2, or 3 Humans + 1, 2, or 3 Computer Players) */}
         {mode === 'computer' && (
-          <div className="mt-5 space-y-5">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="rounded-xl border border-white/10 bg-[#0e141b] p-4">
+          <div className="mt-4 space-y-4">
+            <div className="grid gap-3">
+              <div className="rounded-xl border border-white/10 bg-[#0e141b] p-3.5">
                 <span className="block text-xs font-semibold text-[#a9b3c1]">Human Players</span>
-                <div className="mt-2.5 grid grid-cols-3 gap-2">
+                <div className="mt-2 grid grid-cols-3 gap-2">
                   {([1, 2, 3] as const).map((h) => (
                     <button
                       key={h}
                       type="button"
                       data-testid={`comp-humans-${h}`}
                       onClick={() => handleSelectHumanCount(h)}
-                      className={`min-h-[44px] rounded-xl text-xs font-bold transition sm:text-sm ${
+                      className={`min-h-[42px] rounded-xl text-xs font-bold transition ${
                         humanCount === h
                           ? 'bg-[#22a858] text-white'
                           : 'bg-white/5 text-[#cbd5e1] hover:bg-white/10'
@@ -215,16 +215,16 @@ export const ModeSetupModal: React.FC<ModeSetupModalProps> = ({
                 </div>
               </div>
 
-              <div className="rounded-xl border border-white/10 bg-[#0e141b] p-4">
+              <div className="rounded-xl border border-white/10 bg-[#0e141b] p-3.5">
                 <span className="block text-xs font-semibold text-[#a9b3c1]">Computer Players (AI)</span>
-                <div className="mt-2.5 grid grid-cols-3 gap-2">
+                <div className="mt-2 grid grid-cols-3 gap-2">
                   {([1, 2, 3] as const).map((ai) => (
                     <button
                       key={ai}
                       type="button"
                       data-testid={`comp-ai-${ai}`}
                       onClick={() => handleSelectAiCount(ai)}
-                      className={`min-h-[44px] rounded-xl text-xs font-bold transition sm:text-sm ${
+                      className={`min-h-[42px] rounded-xl text-xs font-bold transition ${
                         aiCount === ai
                           ? 'bg-[#d4af37] text-[#11161d]'
                           : 'bg-white/5 text-[#cbd5e1] hover:bg-white/10'
@@ -237,7 +237,7 @@ export const ModeSetupModal: React.FC<ModeSetupModalProps> = ({
               </div>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-2.5">
               {Array.from({ length: humanCount }).map((_, idx) => (
                 <div key={idx}>
                   <label
@@ -412,7 +412,7 @@ export const ModeSetupModal: React.FC<ModeSetupModalProps> = ({
                   </div>
                 )}
 
-                <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-3.5">
                   {/* Block 1: Generate Separate Invite Codes per Friend */}
                   <div className="flex flex-col justify-between rounded-xl border border-[#d4af37]/35 bg-[#0e141b] p-4">
                     <div>
@@ -520,54 +520,54 @@ export const ModeSetupModal: React.FC<ModeSetupModalProps> = ({
                       </span>
                     </div>
 
-                    <div className="mt-3 grid gap-2.5 sm:grid-cols-3">
+                    <div className="mt-3 grid grid-cols-1 gap-2">
                       {activeRoom.inviteSlots.map((slot, idx) => (
                         <div
                           key={slot.code}
-                          className="flex flex-col justify-between rounded-xl border border-white/10 bg-[#151e29] p-3"
+                          className="flex items-center justify-between gap-2 rounded-xl border border-white/10 bg-[#151e29] px-3 py-2.5"
                         >
-                          <div className="flex items-center justify-between gap-1">
-                            <div className="flex items-center gap-1.5">
-                              <span
-                                className="h-3 w-3 rounded-full"
-                                style={{ backgroundColor: COLOR_HEX[slot.color] }}
-                              />
-                              <span className="text-xs font-bold text-[#f4f1ea]">
-                                Friend {idx + 1}
-                              </span>
-                            </div>
+                          <div className="flex min-w-0 items-center gap-2">
                             <span
-                              className={`text-[10px] font-bold ${
-                                slot.claimedByClientId ? 'text-[#4ade80]' : 'text-[#94a3b8]'
-                              }`}
-                            >
-                              {slot.claimedByClientId ? 'Joined' : 'Waiting'}
-                            </span>
+                              className="h-3 w-3 shrink-0 rounded-full"
+                              style={{ backgroundColor: COLOR_HEX[slot.color] }}
+                            />
+                            <div className="min-w-0">
+                              <div className="text-xs font-bold text-[#f4f1ea]">
+                                Friend {idx + 1}
+                              </div>
+                              <div
+                                className={`text-[10px] font-bold ${
+                                  slot.claimedByClientId ? 'text-[#4ade80]' : 'text-[#94a3b8]'
+                                }`}
+                              >
+                                {slot.claimedByClientId ? 'Joined' : 'Waiting'}
+                              </div>
+                            </div>
                           </div>
 
                           <div
                             data-testid={`invite-slot-code-${idx}`}
-                            className="font-mono-num my-2 text-center text-lg font-extrabold tracking-widest text-[#f3cf68]"
+                            className="font-mono-num text-base font-extrabold tracking-widest text-[#f3cf68]"
                           >
                             {slot.code}
                           </div>
 
                           {slot.claimedByName ? (
-                            <div className="truncate rounded-lg bg-[#22a858]/15 px-2 py-1.5 text-center text-xs font-semibold text-[#4ade80]">
+                            <div className="max-w-[110px] truncate rounded-lg bg-[#22a858]/15 px-2.5 py-1.5 text-center text-xs font-semibold text-[#4ade80]">
                               {slot.claimedByName}
                             </div>
                           ) : (
                             <button
                               type="button"
                               onClick={() => handleCopyCode(slot.code)}
-                              className="inline-flex min-h-[34px] items-center justify-center gap-1.5 rounded-lg border border-[#d4af37]/35 bg-[#d4af37]/10 px-2.5 py-1 text-xs font-bold text-[#f3cf68] hover:bg-[#d4af37]/20"
+                              className="inline-flex min-h-[34px] shrink-0 items-center justify-center gap-1.5 rounded-lg border border-[#d4af37]/35 bg-[#d4af37]/10 px-3 py-1 text-xs font-bold text-[#f3cf68] hover:bg-[#d4af37]/20"
                             >
                               {copiedCode === slot.code ? (
                                 <Check className="h-3.5 w-3.5" />
                               ) : (
                                 <Copy className="h-3.5 w-3.5" />
                               )}
-                              {copiedCode === slot.code ? 'Copied' : 'Copy Code'}
+                              {copiedCode === slot.code ? 'Copied' : 'Copy'}
                             </button>
                           )}
                         </div>

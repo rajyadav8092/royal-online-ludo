@@ -19,7 +19,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       role="dialog"
       aria-modal="true"
       aria-labelledby="settings-title"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4"
+      className="absolute inset-0 z-50 flex items-center justify-center bg-black/75 p-3.5"
     >
       <div className="w-full max-w-md rounded-2xl border border-[#d4af37]/35 bg-[#151e29] p-6 shadow-2xl">
         <div className="flex items-center justify-between border-b border-white/10 pb-4">
@@ -172,11 +172,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </button>
           </div>
 
-          {/* 3D Camera Angle */}
+          {/* 3D Drone View */}
           <div className="flex items-center justify-between rounded-xl border border-white/10 bg-[#0e141b] p-3.5">
             <div className="flex items-center gap-2.5">
               <Video className="h-4 w-4 text-[#f3cf68]" />
-              <span className="text-sm font-semibold text-[#f4f1ea]">3D Camera Angle</span>
+              <span className="text-sm font-semibold text-[#f4f1ea]">Drone View</span>
             </div>
             <div className="flex gap-1.5">
               <button
@@ -191,7 +191,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     : 'bg-white/10 text-[#cbd5e1]'
                 }`}
               >
-                3D Tilt
+                3D Drone
               </button>
               <button
                 type="button"
@@ -205,7 +205,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     : 'bg-white/10 text-[#cbd5e1]'
                 }`}
               >
-                Top View
+                Top Drone
               </button>
             </div>
           </div>

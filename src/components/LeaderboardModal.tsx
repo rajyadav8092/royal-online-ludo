@@ -37,9 +37,9 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({ onClose }) =
       role="dialog"
       aria-modal="true"
       aria-labelledby="leaderboard-title"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4"
+      className="absolute inset-0 z-50 flex items-center justify-center bg-black/75 p-3.5"
     >
-      <div className="flex max-h-[85vh] w-full max-w-2xl flex-col rounded-2xl border border-[#d4af37]/35 bg-[#151e29] p-6 shadow-2xl">
+      <div className="flex max-h-[85vh] w-full max-w-2xl flex-col rounded-2xl border border-[#d4af37]/35 bg-[#151e29] p-4 sm:p-5 shadow-2xl">
         <div className="flex items-center justify-between border-b border-white/10 pb-4">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#d4af37]/15 text-[#f3cf68]">
@@ -87,44 +87,39 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({ onClose }) =
           ) : entries.length === 0 ? (
             <div className="py-12 text-center text-sm text-[#94a3b8]">No matches recorded yet.</div>
           ) : (
-            <table className="w-full border-collapse text-left text-sm">
+            <table className="w-full border-collapse text-left text-xs">
               <thead>
-                <tr className="border-b border-white/10 text-xs text-[#94a3b8]">
-                  <th className="py-2.5 pr-2 font-semibold">Rank</th>
-                  <th className="py-2.5 px-2 font-semibold">Player</th>
-                  <th className="py-2.5 px-2 text-right font-semibold">Wins</th>
-                  <th className="py-2.5 px-2 text-right font-semibold">Win %</th>
-                  <th className="py-2.5 px-2 text-right font-semibold">Captures</th>
-                  <th className="py-2.5 pl-2 text-right font-semibold">Points</th>
+                <tr className="border-b border-white/10 text-[11px] text-[#94a3b8]">
+                  <th className="py-2 pr-1.5 font-semibold">Rank</th>
+                  <th className="py-2 px-1.5 font-semibold">Player</th>
+                  <th className="py-2 px-1.5 text-right font-semibold">Wins</th>
+                  <th className="py-2 px-1.5 text-right font-semibold">Cap</th>
+                  <th className="py-2 pl-1.5 text-right font-semibold">Pts</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
                 {entries.map((entry, index) => {
-                  const winRate = entry.matches > 0 ? Math.round((entry.wins / entry.matches) * 100) : 0;
                   return (
                     <tr key={entry.id} className="hover:bg-white/[0.03]">
-                      <td className="font-mono-num py-3 pr-2 font-bold text-[#f3cf68]">
+                      <td className="font-mono-num py-2.5 pr-1.5 font-bold text-[#f3cf68]">
                         #{index + 1}
                       </td>
-                      <td className="py-3 px-2">
-                        <div className="flex items-center gap-2.5">
+                      <td className="py-2.5 px-1.5">
+                        <div className="flex items-center gap-2">
                           <span
                             className="h-2.5 w-2.5 shrink-0 rounded-full"
                             style={{ backgroundColor: COLOR_HEX[entry.favoriteColor] }}
                           />
-                          <span className="font-semibold text-[#f4f1ea]">{entry.name}</span>
+                          <span className="truncate font-semibold text-[#f4f1ea]">{entry.name}</span>
                         </div>
                       </td>
-                      <td className="font-mono-num py-3 px-2 text-right text-[#d8d1c2]">
+                      <td className="font-mono-num py-2.5 px-1.5 text-right text-[#d8d1c2]">
                         {entry.wins}/{entry.matches}
                       </td>
-                      <td className="font-mono-num py-3 px-2 text-right text-[#a9b3c1]">
-                        {winRate}%
-                      </td>
-                      <td className="font-mono-num py-3 px-2 text-right text-[#d8d1c2]">
+                      <td className="font-mono-num py-2.5 px-1.5 text-right text-[#d8d1c2]">
                         {entry.captures}
                       </td>
-                      <td className="font-mono-num py-3 pl-2 text-right font-bold text-[#f3cf68]">
+                      <td className="font-mono-num py-2.5 pl-1.5 text-right font-bold text-[#f3cf68]">
                         {entry.points}
                       </td>
                     </tr>

@@ -43,40 +43,46 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
     {
       mode: 'computer',
       title: 'Computer Mode',
-      subtitle: '1–3 Humans vs 1–3 AI Players',
-      icon: <Bot className="h-5 w-5 text-[#f3cf68]" />,
-      accent: 'border-[#d4af37]/40 hover:border-[#d4af37]',
+      subtitle: '1–3 Humans vs 1–3 AI',
+      icon: <Bot className="h-5 w-5 text-[#fde047]" />,
+      accent: 'border-[#facc15]/55 hover:border-[#fde047] bg-gradient-to-b from-[#162d52]/95 to-[#0d1c36]/95',
     },
     {
       mode: 'local',
       title: 'Play with Friend',
-      subtitle: 'Pick your blocks · Pass & Play',
+      subtitle: 'Pick blocks · Pass & Play',
       icon: <Users className="h-5 w-5 text-[#4ade80]" />,
-      accent: 'border-[#22a858]/40 hover:border-[#22a858]',
+      accent: 'border-[#22c55e]/55 hover:border-[#4ade80] bg-gradient-to-b from-[#12332d]/95 to-[#0b211f]/95',
     },
     {
       mode: 'online_private',
-      title: 'Online with Friends',
-      subtitle: 'Unique code per friend · Emoji chat',
+      title: 'Online Friends',
+      subtitle: 'Unique codes · Emoji chat',
       icon: <KeyRound className="h-5 w-5 text-[#60a5fa]" />,
-      accent: 'border-[#3b82f6]/40 hover:border-[#3b82f6]',
+      accent: 'border-[#3b82f6]/55 hover:border-[#60a5fa] bg-gradient-to-b from-[#162d57]/95 to-[#0d1c38]/95',
     },
     {
       mode: 'online_global',
       title: 'Global Online',
-      subtitle: `1–4 Players · ${onlinePlayersCount} online`,
+      subtitle: `1–4 Players · ${onlinePlayersCount} live`,
       icon: <Globe className="h-5 w-5 text-[#f472b6]" />,
-      accent: 'border-[#ec4899]/40 hover:border-[#ec4899]',
+      accent: 'border-[#ec4899]/55 hover:border-[#f472b6] bg-gradient-to-b from-[#2c1b47]/95 to-[#18122e]/95',
     },
   ];
 
   return (
-    <div className="pointer-events-none fixed inset-0 z-20 flex flex-col justify-between bg-gradient-to-r from-[#0b1118]/92 via-[#0b1118]/55 to-transparent p-4 sm:p-7 lg:p-10">
-      {/* Top Bar: Instagram Follow Link + Utility Buttons */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <InstagramBadge />
+    <div
+      className="pointer-events-none absolute inset-0 z-20 flex flex-col justify-between p-3.5 sm:p-4"
+      style={{
+        background:
+          'linear-gradient(180deg, rgba(7,18,38,0.86) 0%, rgba(7,18,38,0.12) 34%, rgba(7,18,38,0.12) 58%, rgba(7,18,38,0.92) 86%)',
+      }}
+    >
+      {/* Top Bar: Instagram Follow Link + Shiny Utility Buttons */}
+      <div className="flex items-center justify-between gap-2">
+        <InstagramBadge compact />
 
-        <div className="pointer-events-auto flex items-center gap-2">
+        <div className="pointer-events-auto flex items-center gap-1.5">
           <button
             type="button"
             aria-label={settings.musicEnabled ? 'Mute Music' : 'Play Music'}
@@ -84,12 +90,12 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
               soundEngine.playClick();
               onToggleMusic();
             }}
-            className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/15 bg-[#121a24]/92 text-[#f4f1ea] transition hover:border-[#d4af37]"
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-[#facc15]/40 bg-[#0e2242]/92 text-[#f8fafc] shadow-md transition hover:border-[#fde047] hover:brightness-110"
           >
             {settings.musicEnabled ? (
-              <Music className="h-5 w-5 text-[#f3cf68]" />
+              <Music className="h-4 w-4 text-[#fde047]" />
             ) : (
-              <VolumeX className="h-5 w-5 text-[#94a3b8]" />
+              <VolumeX className="h-4 w-4 text-[#94a3b8]" />
             )}
           </button>
           <button
@@ -99,10 +105,9 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
               soundEngine.playClick();
               onOpenLeaderboard();
             }}
-            className="inline-flex h-11 items-center gap-2 rounded-xl border border-white/15 bg-[#121a24]/92 px-3.5 text-xs font-bold text-[#f4f1ea] transition hover:border-[#d4af37]"
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-[#facc15]/40 bg-[#0e2242]/92 text-[#f8fafc] shadow-md transition hover:border-[#fde047] hover:brightness-110"
           >
-            <Trophy className="h-4 w-4 text-[#f3cf68]" />
-            <span className="hidden sm:inline">Leaderboard</span>
+            <Trophy className="h-4 w-4 text-[#fde047]" />
           </button>
           <button
             type="button"
@@ -111,96 +116,91 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
               soundEngine.playClick();
               onOpenSettings();
             }}
-            className="inline-flex h-11 items-center gap-2 rounded-xl border border-white/15 bg-[#121a24]/92 px-3.5 text-xs font-bold text-[#f4f1ea] transition hover:border-[#d4af37]"
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-[#facc15]/40 bg-[#0e2242]/92 text-[#f8fafc] shadow-md transition hover:border-[#fde047] hover:brightness-110"
           >
-            <Settings className="h-4 w-4 text-[#cbd5e1]" />
-            <span className="hidden sm:inline">Settings</span>
+            <Settings className="h-4 w-4 text-[#e2e8f0]" />
           </button>
         </div>
       </div>
 
-      {/* Main Content: Left Negative-Space Lockup + Mode Grid */}
-      <div className="my-auto flex w-full max-w-[600px] flex-col gap-5">
-        {/* Custom Inline SVG Title Lockup */}
-        <div className="pointer-events-none">
-          <svg
-            viewBox="0 0 540 112"
-            className="h-auto w-full max-w-[440px] drop-shadow-[0_6px_18px_rgba(0,0,0,0.85)]"
-            aria-label="Online Ludo Game"
+      {/* Upper Emblem Lockup (Leaves Center Open for Shiny 3D Board Showcase) */}
+      <div className="pointer-events-none mt-1 flex flex-col items-center">
+        <svg
+          viewBox="0 0 540 110"
+          className="h-auto w-full max-w-[360px] drop-shadow-[0_6px_20px_rgba(0,0,0,0.9)]"
+          aria-label="Online Ludo Game"
+        >
+          <defs>
+            <linearGradient id="goldEmblem" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#fef08a" />
+              <stop offset="50%" stopColor="#facc15" />
+              <stop offset="100%" stopColor="#ca8a04" />
+            </linearGradient>
+          </defs>
+          {/* Crown Crest */}
+          <path
+            d="M14 52 L22 20 L38 37 L52 14 L66 37 L82 20 L90 52 Z"
+            fill="url(#goldEmblem)"
+            stroke="#0f172a"
+            strokeWidth="3"
+          />
+          <rect x="14" y="56" width="76" height="9" rx="4" fill="url(#goldEmblem)" stroke="#0f172a" strokeWidth="1.5" />
+          {/* Typography Lockup */}
+          <text
+            x="108"
+            y="51"
+            fill="#ffffff"
+            fontFamily="Outfit, sans-serif"
+            fontWeight="800"
+            fontSize="36"
+            letterSpacing="1.2"
           >
-            <defs>
-              <linearGradient id="goldEmblem" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0%" stopColor="#fde68a" />
-                <stop offset="50%" stopColor="#d4af37" />
-                <stop offset="100%" stopColor="#9a7215" />
-              </linearGradient>
-            </defs>
-            {/* Crown Crest */}
-            <path
-              d="M14 52 L22 22 L38 38 L52 16 L66 38 L82 22 L90 52 Z"
-              fill="url(#goldEmblem)"
-              stroke="#141a22"
-              strokeWidth="2.5"
-            />
-            <rect x="14" y="56" width="76" height="9" rx="4" fill="url(#goldEmblem)" />
-            {/* Typography Lockup */}
-            <text
-              x="108"
-              y="52"
-              fill="#f8f4ea"
-              fontFamily="Outfit, sans-serif"
-              fontWeight="800"
-              fontSize="36"
-              letterSpacing="1.2"
-            >
-              ONLINE LUDO
-            </text>
-            <text
-              x="384"
-              y="52"
-              fill="url(#goldEmblem)"
-              fontFamily="Outfit, sans-serif"
-              fontWeight="800"
-              fontSize="36"
-              letterSpacing="1.2"
-            >
-              GAME
-            </text>
-            <text
-              x="110"
-              y="84"
-              fill="#cbd5e1"
-              fontFamily="Plus Jakarta Sans, sans-serif"
-              fontWeight="600"
-              fontSize="15"
-              letterSpacing="4.5"
-            >
-              3D MULTIPLAYER EDITION
-            </text>
-          </svg>
-        </div>
-
-        {/* Primary Quick Start CTA */}
-        <div className="pointer-events-auto flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            data-start="true"
-            onClick={() => {
-              soundEngine.playClick();
-              onQuickStart();
-            }}
-            className="inline-flex min-h-[48px] items-center gap-2.5 rounded-xl bg-[#d4af37] px-7 py-3 text-base font-extrabold text-[#11161d] shadow-lg transition hover:bg-[#e5c14d] active:scale-[0.98]"
+            ONLINE LUDO
+          </text>
+          <text
+            x="384"
+            y="51"
+            fill="url(#goldEmblem)"
+            fontFamily="Outfit, sans-serif"
+            fontWeight="800"
+            fontSize="36"
+            letterSpacing="1.2"
           >
-            <Play className="h-5 w-5 fill-current" />
-            Quick Play
-          </button>
-          <span className="text-xs font-semibold text-[#e2e8f0] drop-shadow">
-            or choose a game mode below
-          </span>
-        </div>
+            GAME
+          </text>
+          <text
+            x="110"
+            y="82"
+            fill="#e2e8f0"
+            fontFamily="Plus Jakarta Sans, sans-serif"
+            fontWeight="700"
+            fontSize="15"
+            letterSpacing="4.5"
+          >
+            3D MULTIPLAYER EDITION
+          </text>
+        </svg>
+      </div>
 
-        {/* 4 Mode Cards */}
-        <div className="pointer-events-auto grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+      {/* Spacer allowing center 3D Board Drone Orbit to gleam clearly */}
+      <div className="flex-1" />
+
+      {/* Bottom Glossy Quick Play + 2x2 Mode Cards */}
+      <div className="pointer-events-auto flex flex-col gap-2.5">
+        <button
+          type="button"
+          data-start="true"
+          onClick={() => {
+            soundEngine.playClick();
+            onQuickStart();
+          }}
+          className="inline-flex min-h-[48px] w-full items-center justify-center gap-2.5 rounded-2xl border border-[#fef08a]/80 bg-gradient-to-b from-[#fde047] via-[#eab308] to-[#b45309] px-6 py-2.5 text-base font-extrabold text-[#0f172a] shadow-[0_6px_24px_rgba(234,179,8,0.45)] transition hover:brightness-110 active:scale-[0.98]"
+        >
+          <Play className="h-5 w-5 fill-current" />
+          Quick Play
+        </button>
+
+        <div className="grid grid-cols-2 gap-2">
           {modeCards.map((card) => (
             <button
               key={card.mode}
@@ -209,25 +209,24 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({
                 soundEngine.playClick();
                 onSelectMode(card.mode);
               }}
-              className={`flex min-h-[68px] items-center gap-3.5 rounded-xl border bg-[#121a24]/95 px-4 py-3 text-left transition duration-150 hover:-translate-y-0.5 ${card.accent}`}
+              className={`flex min-h-[62px] items-center gap-2.5 rounded-xl border px-3 py-2 text-left shadow-lg transition duration-150 hover:-translate-y-0.5 hover:brightness-110 ${card.accent}`}
             >
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white/5">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/15 bg-white/10">
                 {card.icon}
               </div>
               <div className="min-w-0">
-                <div className="font-display truncate text-sm font-bold text-[#f4f1ea]">
+                <div className="font-display truncate text-xs font-bold text-[#ffffff] sm:text-sm">
                   {card.title}
                 </div>
-                <div className="truncate text-xs text-[#b5c2d1]">{card.subtitle}</div>
+                <div className="truncate text-[11px] font-medium text-[#cbd5e1]">{card.subtitle}</div>
               </div>
             </button>
           ))}
         </div>
-      </div>
 
-      {/* Bottom Control Hint Line (Flat, borderless) */}
-      <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-medium text-[#cbd5e1] drop-shadow">
-        <span>Enter / Space Quick Play · Tap 3D Die to Roll · Tap Highlighted Token to Move</span>
+        <div className="text-center text-[11px] font-medium text-[#cbd5e1]">
+          Tap 3D Die to Roll · Tap Highlighted Token to Move
+        </div>
       </div>
     </div>
   );

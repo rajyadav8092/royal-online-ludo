@@ -13,8 +13,8 @@ export const InstagramBadge: React.FC<InstagramBadgeProps> = ({ compact = false 
       rel="noopener noreferrer"
       onClick={() => soundEngine.playClick()}
       aria-label="Follow us on Instagram @x__rajiv__yadav"
-      className={`pointer-events-auto inline-flex items-center gap-2 rounded-lg border border-[#d4af37]/35 bg-[#121a24]/95 text-[#f4f1ea] transition-transform duration-150 hover:scale-[1.02] hover:border-[#d4af37] focus-visible:outline-2 focus-visible:outline-[#d4af37] ${
-        compact ? 'px-2.5 py-1.5 text-xs' : 'px-3.5 py-2 text-xs sm:text-sm'
+      className={`pointer-events-auto inline-flex items-center gap-1.5 rounded-xl border border-[#facc15]/45 bg-[#0e2242]/95 text-[#ffffff] shadow-md transition-transform duration-150 hover:scale-[1.02] hover:border-[#fde047] focus-visible:outline-2 focus-visible:outline-[#facc15] ${
+        compact ? 'px-2.5 py-1.5 text-[11px]' : 'px-3.5 py-2 text-xs'
       }`}
     >
       <svg

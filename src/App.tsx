@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { soundEngine } from './audio/soundEngine';
+import { BlurredLudoBackdrop } from './components/BlurredLudoBackdrop';
 import { GameHud } from './components/GameHud';
 import { InstructionsModal } from './components/InstructionsModal';
 import { LeaderboardModal } from './components/LeaderboardModal';
@@ -494,8 +495,13 @@ export default function App() {
   );
 
   return (
-    <main className="relative h-dvh w-full overflow-hidden bg-[#0e141b]">
-      {/* Persistent 3D Three.js Canvas */}
+    <div className="relative flex h-dvh w-full items-center justify-center overflow-hidden bg-[#061124]">
+      {/* Fixed blurred Ludo wallpaper on wide/desktop/console screens */}
+      <BlurredLudoBackdrop />
+
+      {/* Mobile-width game frame on all screens */}
+      <main className="relative z-10 h-dvh w-full max-w-[460px] overflow-hidden bg-[#0a182e] shadow-[0_0_90px_rgba(0,0,0,0.92)] sm:border-x sm:border-[#d4af37]/35">
+        {/* Persistent 3D Three.js Canvas */}
       <LudoScene3D
         screenPhase={screenPhase}
         gameState={gameState}
@@ -613,6 +619,7 @@ export default function App() {
       {showLeaderboard && (
         <LeaderboardModal onClose={() => setShowLeaderboard(false)} />
       )}
-    </main>
+      </main>
+    </div>
   );
 }
