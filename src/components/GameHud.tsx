@@ -1,7 +1,6 @@
 import React from 'react';
 import {
   Camera,
-  Crown,
   Home,
   Music,
   Pause,
@@ -22,6 +21,7 @@ import {
 } from '../game/types';
 import { soundEngine } from '../audio/soundEngine';
 import { InstagramBadge } from './InstagramBadge';
+import { VictoryOverlay } from './VictoryOverlay';
 
 const QUICK_EMOJIS = ['👏', '😂', '🔥', '😎', '😭', '😡', '🎲', '🙏', '❤️', '⚡'] as const;
 
@@ -366,77 +366,15 @@ export const GameHud: React.FC<GameHudProps> = ({
         </div>
       )}
 
-      {/* GAME OVER / VICTORY MODAL */}
+      {/* GAME OVER / CELEBRATORY VICTORY OVERLAY WITH CONFETTI */}
       {screenPhase === 'gameover' && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="victory-title"
-          className="pointer-events-auto absolute inset-0 z-40 flex items-center justify-center bg-black/75 p-4"
-        >
-          <div className="w-full max-w-md rounded-2xl border border-[#d4af37]/50 bg-[#151e29] p-6 text-center shadow-2xl">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#d4af37]/20 text-[#f3cf68]">
-              <Crown className="h-8 w-8" />
-            </div>
-            <h2 id="victory-title" className="font-display mt-3 text-2xl font-extrabold text-[#f4f1ea]">
-              {gameState.players[gameState.winners[0]]?.name} Wins!
-            </h2>
-            <p className="mt-1 text-xs text-[#a9b3c1]">
-              Completed in {gameState.turnCount} turns · Leaderboard updated
-            </p>
-
-            <div className="mt-4 space-y-2 text-left">
-              {gameState.winners.map((color, idx) => (
-                <div
-                  key={color}
-                  className="flex items-center justify-between rounded-xl border border-white/10 bg-[#0e141b] px-3.5 py-2.5 text-sm"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <span className="font-mono-num font-bold text-[#f3cf68]">#{idx + 1}</span>
-                    <span
-                      className="h-3 w-3 rounded-full"
-                      style={{ backgroundColor: COLOR_HEX[color] }}
-                    />
-                    <span className="font-semibold text-[#f4f1ea]">
-                      {gameState.players[color].name}
-                    </span>
-                  </div>
-                  <span className="font-mono-num text-xs text-[#a9b3c1]">
-                    {gameState.capturesCount[color]} captures
-                  </span>
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-6 flex flex-wrap justify-center gap-3">
-              {!isOnlineMatch && (
-                <button
-                  type="button"
-                  data-start="true"
-                  onClick={() => {
-                    soundEngine.playClick();
-                    onRestart();
-                  }}
-                  className="inline-flex min-h-[44px] items-center gap-2 rounded-xl bg-[#d4af37] px-6 py-2.5 text-sm font-bold text-[#11161d] hover:bg-[#e5c14d]"
-                >
-                  <RotateCcw className="h-4 w-4" />
-                  Play Again
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => {
-                  soundEngine.playClick();
-                  onExitToTitle();
-                }}
-                className="inline-flex min-h-[44px] items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-6 py-2.5 text-sm font-semibold text-[#f4f1ea] hover:bg-white/10"
-              >
-                <Home className="h-4 w-4" />
-                Back to Home
-              </button>
-            </div>
-          </div>
-        </div>
+        <VictoryOverlay
+          gameState={gameState}
+          isOnlineMatch={isOnlineMatch}
+          onRestart={onRestart}
+          onOpenLeaderboard={onOpenLeaderboard}
+          onExitToTitle={onExitToTitle}
+        />
       )}
     </div>
   );

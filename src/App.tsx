@@ -40,6 +40,20 @@ const DEFAULT_SETTINGS: GameSettings = {
   playerName: 'Player 1',
 };
 
+const CLIENT_ID_KEY = 'ludo_tab_client_id_v1';
+
+function getOrCreateTabClientId(): string {
+  try {
+    const saved = sessionStorage.getItem(CLIENT_ID_KEY);
+    if (saved && saved.length >= 6) return saved;
+    const generated = `c-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    sessionStorage.setItem(CLIENT_ID_KEY, generated);
+    return generated;
+  } catch {
+    return `c-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  }
+}
+
 function loadInitialSettings(): GameSettings {
   try {
     const raw = localStorage.getItem(SETTINGS_STORAGE_KEY);
@@ -72,14 +86,17 @@ export default function App() {
     reachedHome: boolean;
   } | null>(null);
 
-  // WebSocket Multiplayer State
+  // Dual-Transport Online Multiplayer State (WebSocket primary + automatic HTTP REST fallback)
   const wsRef = useRef<WebSocket | null>(null);
+  const [wsOpen, setWsOpen] = useState(false);
   const [onlineConnected, setOnlineConnected] = useState(false);
-  const [clientId, setClientId] = useState<string | null>(null);
+  const [clientId, setClientId] = useState<string>(getOrCreateTabClientId);
   const [onlinePlayersCount, setOnlinePlayersCount] = useState(1);
   const [activeRoom, setActiveRoom] = useState<OnlineRoomSnapshot | null>(null);
   const [roomError, setRoomError] = useState<string | null>(null);
   const [emojiMessages, setEmojiMessages] = useState<EmojiChatMessage[]>([]);
+  const roomEventSeqRef = useRef(0);
+  const seenEmojiIdsRef = useRef<Set<string>>(new Set());
 
   const lastOfflineConfigRef = useRef<{
     mode: 'computer' | 'local';
@@ -126,127 +143,313 @@ export default function App() {
     setSettings((prev) => ({ ...prev, ...patch }));
   }, []);
 
-  // Connect WebSocket for online rooms & global matchmaking
+  // Unified Server Message Handler (works identically for WebSocket & HTTP REST sync)
+  const processServerEvent = useCallback((msg: Record<string, unknown>) => {
+    const type = String(msg.type || '');
+
+    if (type === 'connected') {
+      if (msg.clientId) setClientId(String(msg.clientId));
+      setOnlinePlayersCount(Number(msg.onlinePlayers || 1));
+    } else if (type === 'online_stats') {
+      setOnlinePlayersCount(Number(msg.onlinePlayers || 1));
+    } else if (type === 'room_joined' || type === 'room_updated') {
+      setRoomError(null);
+      const room = msg.room as OnlineRoomSnapshot;
+      setActiveRoom(room);
+      if (room?.gameState && room.status === 'playing') {
+        setGameState(room.gameState);
+      }
+    } else if (type === 'room_error') {
+      setRoomError(String(msg.message || 'Room error'));
+    } else if (type === 'game_started') {
+      const room = msg.room as OnlineRoomSnapshot;
+      setActiveRoom(room);
+      setSetupMode(null);
+      setPendingInstructionMode(null);
+      if (room?.gameState) {
+        setGameState(room.gameState);
+        setScreenPhase('playing');
+      }
+    } else if (type === 'dice_rolled') {
+      const rolled = Number(msg.rolledValue);
+      const nextGs = msg.gameState as GameState;
+      soundEngine.playDiceRoll();
+      setDiceRollingVisual(true);
+      window.setTimeout(() => {
+        setDiceRollingVisual(false);
+        soundEngine.playDiceLand(rolled);
+        setGameState(nextGs);
+      }, 420);
+    } else if (type === 'token_moved') {
+      const color = msg.color as PlayerColor;
+      const tokenId = Number(msg.tokenId);
+      const moveRes = msg.moveResult as MoveResult;
+      const nextGs = msg.gameState as GameState;
+
+      stepSeqRef.current += 1;
+      setStepAnimationSignal({
+        seq: stepSeqRef.current,
+        color,
+        tokenId,
+        steps: moveRes.stepsPath,
+        captured: moveRes.capturedTokens,
+        reachedHome: moveRes.reachedHome,
+      });
+
+      if (moveRes.capturedTokens.length > 0) {
+        window.setTimeout(() => soundEngine.playCapture(), 260);
+      } else if (moveRes.reachedHome) {
+        window.setTimeout(() => soundEngine.playHomeGoal(), 260);
+      } else if (moveRes.landedOnSafe) {
+        window.setTimeout(() => soundEngine.playSafeTile(), 220);
+      }
+
+      setGameState(nextGs);
+      if (moveRes.gameFinished) {
+        window.setTimeout(() => {
+          soundEngine.playVictory();
+          setScreenPhase('gameover');
+        }, 520);
+      }
+    } else if (type === 'emoji_chat') {
+      const chatMsg = msg.message as EmojiChatMessage;
+      if (!chatMsg || !chatMsg.id || seenEmojiIdsRef.current.has(chatMsg.id)) return;
+      seenEmojiIdsRef.current.add(chatMsg.id);
+      soundEngine.playEmojiPop();
+      setEmojiMessages((prev) => [...prev.slice(-15), chatMsg]);
+      window.setTimeout(() => {
+        setEmojiMessages((prev) => prev.filter((item) => item.id !== chatMsg.id));
+      }, 3200);
+    }
+  }, []);
+
+  // Connect WebSocket + HTTP /api/health probe so Shared/External URLs never stall on "Connecting..."
   useEffect(() => {
     let closed = false;
     let reconnectTimer: number | null = null;
 
-    const connect = () => {
+    const probeHealth = async () => {
+      try {
+        const res = await fetch(`/api/health?clientId=${encodeURIComponent(clientId)}`);
+        if (!res.ok || closed) return;
+        const data = (await res.json()) as { ok?: boolean; onlinePlayers?: number };
+        if (data.ok && !closed) {
+          setOnlineConnected(true);
+          if (typeof data.onlinePlayers === 'number') {
+            setOnlinePlayersCount(data.onlinePlayers);
+          }
+        }
+      } catch {
+        // Retry on interval if offline
+      }
+    };
+
+    probeHealth();
+    const healthTimer = window.setInterval(probeHealth, 8000);
+
+    const connectWs = () => {
       if (closed) return;
       const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const ws = new WebSocket(`${proto}//${window.location.host}/ws`);
+      const ws = new WebSocket(
+        `${proto}//${window.location.host}/ws?clientId=${encodeURIComponent(clientId)}`
+      );
       wsRef.current = ws;
 
       ws.onopen = () => {
-        if (!closed) setOnlineConnected(true);
+        if (!closed) {
+          setWsOpen(true);
+          setOnlineConnected(true);
+        }
       };
 
       ws.onmessage = (event) => {
-        let msg: Record<string, unknown>;
         try {
-          msg = JSON.parse(String(event.data));
+          const msg = JSON.parse(String(event.data)) as Record<string, unknown>;
+          processServerEvent(msg);
         } catch {
-          return;
+          // Ignore malformed frame
         }
-        const type = String(msg.type || '');
+      };
 
-        if (type === 'connected') {
-          setClientId(String(msg.clientId || ''));
-          setOnlinePlayersCount(Number(msg.onlinePlayers || 1));
-        } else if (type === 'online_stats') {
-          setOnlinePlayersCount(Number(msg.onlinePlayers || 1));
-        } else if (type === 'room_joined' || type === 'room_updated') {
-          setRoomError(null);
-          const room = msg.room as OnlineRoomSnapshot;
-          setActiveRoom(room);
-          if (room.gameState && room.status === 'playing') {
-            setGameState(room.gameState);
-          }
-        } else if (type === 'room_error') {
-          setRoomError(String(msg.message || 'Room error'));
-        } else if (type === 'game_started') {
-          const room = msg.room as OnlineRoomSnapshot;
-          setActiveRoom(room);
-          setSetupMode(null);
-          setPendingInstructionMode(null);
-          if (room.gameState) {
-            setGameState(room.gameState);
-            setScreenPhase('playing');
-          }
-        } else if (type === 'dice_rolled') {
-          const rolled = Number(msg.rolledValue);
-          const nextGs = msg.gameState as GameState;
-          soundEngine.playDiceRoll();
-          setDiceRollingVisual(true);
-          window.setTimeout(() => {
-            setDiceRollingVisual(false);
-            soundEngine.playDiceLand(rolled);
-            setGameState(nextGs);
-          }, 420);
-        } else if (type === 'token_moved') {
-          const color = msg.color as PlayerColor;
-          const tokenId = Number(msg.tokenId);
-          const moveRes = msg.moveResult as MoveResult;
-          const nextGs = msg.gameState as GameState;
-
-          stepSeqRef.current += 1;
-          setStepAnimationSignal({
-            seq: stepSeqRef.current,
-            color,
-            tokenId,
-            steps: moveRes.stepsPath,
-            captured: moveRes.capturedTokens,
-            reachedHome: moveRes.reachedHome,
-          });
-
-          if (moveRes.capturedTokens.length > 0) {
-            window.setTimeout(() => soundEngine.playCapture(), 260);
-          } else if (moveRes.reachedHome) {
-            window.setTimeout(() => soundEngine.playHomeGoal(), 260);
-          } else if (moveRes.landedOnSafe) {
-            window.setTimeout(() => soundEngine.playSafeTile(), 220);
-          }
-
-          setGameState(nextGs);
-          if (moveRes.gameFinished) {
-            window.setTimeout(() => {
-              soundEngine.playVictory();
-              setScreenPhase('gameover');
-            }, 520);
-          }
-        } else if (type === 'emoji_chat') {
-          const chatMsg = msg.message as EmojiChatMessage;
-          if (!chatMsg || !chatMsg.id) return;
-          soundEngine.playEmojiPop();
-          setEmojiMessages((prev) => [...prev.slice(-15), chatMsg]);
-          window.setTimeout(() => {
-            setEmojiMessages((prev) => prev.filter((item) => item.id !== chatMsg.id));
-          }, 3200);
-        }
+      ws.onerror = () => {
+        if (!closed) setWsOpen(false);
       };
 
       ws.onclose = () => {
         if (!closed) {
-          setOnlineConnected(false);
-          reconnectTimer = window.setTimeout(connect, 2000);
+          setWsOpen(false);
+          probeHealth();
+          reconnectTimer = window.setTimeout(connectWs, 3000);
         }
       };
     };
 
-    connect();
+    connectWs();
 
     return () => {
       closed = true;
+      window.clearInterval(healthTimer);
       if (reconnectTimer) clearTimeout(reconnectTimer);
       wsRef.current?.close();
     };
-  }, []);
+  }, [clientId, processServerEvent]);
 
-  const sendWs = useCallback((payload: unknown) => {
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify(payload));
-    }
-  }, []);
+  // Automatic HTTP Polling Sync whenever WebSocket is unavailable while inside a room or online lobby
+  useEffect(() => {
+    const needsSync =
+      Boolean(activeRoom) ||
+      setupMode === 'online_private' ||
+      setupMode === 'online_global';
+    if (!needsSync || wsOpen) return;
+
+    let cancelled = false;
+    const pollRoom = async () => {
+      try {
+        const res = await fetch(
+          `/api/rooms/state?clientId=${encodeURIComponent(clientId)}&sinceSeq=${roomEventSeqRef.current}`
+        );
+        if (!res.ok || cancelled) return;
+        const data = (await res.json()) as {
+          onlinePlayers?: number;
+          room?: OnlineRoomSnapshot | null;
+          events?: Array<{ seq: number; type: string; payload: Record<string, unknown> }>;
+          eventSeq?: number;
+        };
+        if (cancelled) return;
+
+        setOnlineConnected(true);
+        if (typeof data.onlinePlayers === 'number') {
+          setOnlinePlayersCount(data.onlinePlayers);
+        }
+
+        if (data.events && data.events.length > 0) {
+          for (const ev of data.events) {
+            if (ev.seq > roomEventSeqRef.current) {
+              roomEventSeqRef.current = ev.seq;
+              processServerEvent({ type: ev.type, ...ev.payload });
+            }
+          }
+        } else if (typeof data.eventSeq === 'number' && data.eventSeq > roomEventSeqRef.current) {
+          roomEventSeqRef.current = data.eventSeq;
+        }
+
+        if (data.room) {
+          setActiveRoom(data.room);
+          if (data.room.status === 'playing' && data.room.gameState && screenPhase !== 'playing') {
+            setSetupMode(null);
+            setPendingInstructionMode(null);
+            setGameState(data.room.gameState);
+            setScreenPhase('playing');
+          }
+        }
+      } catch {
+        // Ignore transient poll failure
+      }
+    };
+
+    const timer = window.setInterval(pollRoom, 650);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [activeRoom, setupMode, wsOpen, clientId, screenPhase, processServerEvent]);
+
+  const sendOnlineAction = useCallback(
+    async (payload: Record<string, unknown>) => {
+      const ws = wsRef.current;
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify(payload));
+        return;
+      }
+
+      // Seamless HTTP REST fallback when WebSocket upgrade is unavailable/blocked
+      const actionType = String(payload.type || '');
+      const postJson = async (url: string, body: Record<string, unknown>) => {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ clientId, ...body }),
+        });
+        const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+        if (!res.ok) {
+          setRoomError(String(data.error || 'Connection error. Please try again.'));
+          return null;
+        }
+        return data;
+      };
+
+      try {
+        if (actionType === 'create_room') {
+          const data = await postJson('/api/rooms/create', {
+            name: payload.name,
+            friendCount: payload.friendCount,
+          });
+          if (data?.room) {
+            roomEventSeqRef.current = Number(data.eventSeq || 0);
+            processServerEvent({ type: 'room_joined', room: data.room });
+          }
+        } else if (actionType === 'join_room') {
+          const data = await postJson('/api/rooms/join', {
+            code: payload.code,
+            name: payload.name,
+          });
+          if (data?.room) {
+            roomEventSeqRef.current = Number(data.eventSeq || 0);
+            processServerEvent({ type: 'room_joined', room: data.room });
+          }
+        } else if (actionType === 'join_global') {
+          const data = await postJson('/api/rooms/global', {
+            name: payload.name,
+            maxPlayers: payload.maxPlayers,
+          });
+          if (data?.room) {
+            const r = data.room as OnlineRoomSnapshot;
+            roomEventSeqRef.current = Number(data.eventSeq || 0);
+            if (r.status === 'playing' && r.gameState) {
+              processServerEvent({ type: 'game_started', room: r });
+            } else {
+              processServerEvent({ type: 'room_joined', room: r });
+            }
+          }
+        } else if (actionType === 'leave_room') {
+          await postJson('/api/rooms/leave', {});
+          roomEventSeqRef.current = 0;
+        } else if (actionType === 'start_room_game') {
+          const data = await postJson('/api/rooms/start', {
+            fillWithBots: Boolean(payload.fillWithBots),
+          });
+          if (data?.room) {
+            roomEventSeqRef.current = Number(data.eventSeq || roomEventSeqRef.current);
+            processServerEvent({ type: 'game_started', room: data.room });
+          }
+        } else if (actionType === 'roll_dice') {
+          const data = await postJson('/api/rooms/roll', {});
+          if (data) {
+            if (typeof data.seq === 'number') {
+              roomEventSeqRef.current = Math.max(roomEventSeqRef.current, data.seq);
+            }
+            processServerEvent({ type: 'dice_rolled', ...data });
+          }
+        } else if (actionType === 'move_token') {
+          const data = await postJson('/api/rooms/move', { tokenId: payload.tokenId });
+          if (data) {
+            if (typeof data.seq === 'number') {
+              roomEventSeqRef.current = Math.max(roomEventSeqRef.current, data.seq);
+            }
+            processServerEvent({ type: 'token_moved', ...data });
+          }
+        } else if (actionType === 'emoji_chat') {
+          const data = await postJson('/api/rooms/emoji', { emoji: payload.emoji });
+          if (data?.message) {
+            processServerEvent({ type: 'emoji_chat', message: data.message });
+          }
+        }
+      } catch {
+        setRoomError('Unable to reach game server right now.');
+      }
+    },
+    [clientId, processServerEvent]
+  );
 
   // Offline Match Starter
   const startOfflineMatch = useCallback((mode: 'computer' | 'local', players: PlayerConfig[]) => {
@@ -268,13 +471,29 @@ export default function App() {
     startOfflineMatch('computer', players);
   }, [settings.playerName, startOfflineMatch]);
 
-  // Support ?autostart=1
+  // Support ?autostart=1 and ?victory_preview=1
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('autostart') === '1') {
+    if (params.get('victory_preview') === '1') {
+      const players = buildComputerPlayers(1, 3, [settings.playerName || 'Player 1']);
+      const initial = createInitialGameState('computer', players);
+      initial.turnPhase = 'finished';
+      initial.winners = ['red', 'yellow', 'green', 'blue'];
+      initial.turnCount = 42;
+      initial.capturesCount = { red: 4, yellow: 2, green: 1, blue: 0 };
+      initial.tokens.red.forEach((t) => {
+        t.progress = 56;
+      });
+      initial.tokens.yellow[0].progress = 56;
+      initial.tokens.yellow[1].progress = 56;
+      lastOfflineConfigRef.current = { mode: 'computer', players };
+      recordedMatchIdRef.current = initial.startedAt;
+      setGameState(initial);
+      setScreenPhase('gameover');
+    } else if (params.get('autostart') === '1') {
       handleQuickStart();
     }
-  }, [handleQuickStart]);
+  }, [handleQuickStart, settings.playerName]);
 
   // Identify local client's color in online matches
   const localClientColor = useMemo<PlayerColor | null>(() => {
@@ -308,7 +527,7 @@ export default function App() {
 
     if (gameState.mode.startsWith('online')) {
       if (!currentPlayer.isAI && currentPlayer.clientId !== clientId) return;
-      sendWs({ type: 'roll_dice' });
+      void sendOnlineAction({ type: 'roll_dice' });
       return;
     }
 
@@ -321,7 +540,7 @@ export default function App() {
       soundEngine.playDiceLand(rolled);
       setGameState((prev) => (prev ? applyDiceRoll(prev, rolled) : prev));
     }, 450);
-  }, [gameState, screenPhase, diceRollingVisual, clientId, sendWs]);
+  }, [gameState, screenPhase, diceRollingVisual, clientId, sendOnlineAction]);
 
   // Token Selection Handler (plays requested vibration sound on token click!)
   const handleSelectToken = useCallback(
@@ -340,7 +559,7 @@ export default function App() {
 
       if (gameState.mode.startsWith('online')) {
         if (!currentPlayer.isAI && currentPlayer.clientId !== clientId) return;
-        sendWs({ type: 'move_token', tokenId });
+        void sendOnlineAction({ type: 'move_token', tokenId });
         return;
       }
 
@@ -372,7 +591,7 @@ export default function App() {
         }, 550);
       }
     },
-    [gameState, screenPhase, clientId, sendWs]
+    [gameState, screenPhase, clientId, sendOnlineAction]
   );
 
   // Record Offline Game Results to In-Memory Global Leaderboard
@@ -478,7 +697,7 @@ export default function App() {
 
   const handleExitToTitle = () => {
     if (activeRoom) {
-      sendWs({ type: 'leave_room' });
+      void sendOnlineAction({ type: 'leave_room' });
       setActiveRoom(null);
     }
     setEmojiMessages([]);
@@ -489,9 +708,9 @@ export default function App() {
   const handleSendEmoji = useCallback(
     (emoji: string) => {
       soundEngine.playClick();
-      sendWs({ type: 'emoji_chat', emoji });
+      void sendOnlineAction({ type: 'emoji_chat', emoji });
     },
-    [sendWs]
+    [sendOnlineAction]
   );
 
   return (
@@ -584,21 +803,21 @@ export default function App() {
           onStartOffline={startOfflineMatch}
           onCreateOnlineRoom={(name, friendCount) => {
             setRoomError(null);
-            sendWs({ type: 'create_room', name, friendCount });
+            void sendOnlineAction({ type: 'create_room', name, friendCount });
           }}
           onJoinOnlineRoom={(code, name) => {
             setRoomError(null);
-            sendWs({ type: 'join_room', code, name });
+            void sendOnlineAction({ type: 'join_room', code, name });
           }}
           onJoinGlobalQueue={(name, maxPlayers) => {
             setRoomError(null);
-            sendWs({ type: 'join_global', name, maxPlayers });
+            void sendOnlineAction({ type: 'join_global', name, maxPlayers });
           }}
           onStartOnlineRoom={(fillWithBots) => {
-            sendWs({ type: 'start_room_game', fillWithBots });
+            void sendOnlineAction({ type: 'start_room_game', fillWithBots });
           }}
           onLeaveOnlineRoom={() => {
-            sendWs({ type: 'leave_room' });
+            void sendOnlineAction({ type: 'leave_room' });
             setActiveRoom(null);
             setRoomError(null);
           }}

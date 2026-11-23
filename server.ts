@@ -80,6 +80,12 @@ function getSortedLeaderboard(): LeaderboardEntry[] {
     .slice(0, 25);
 }
 
+interface RoomEvent {
+  seq: number;
+  type: 'game_started' | 'dice_rolled' | 'token_moved' | 'emoji_chat';
+  payload: Record<string, unknown>;
+}
+
 interface InternalRoom {
   code: string;
   isGlobal: boolean;
@@ -90,12 +96,37 @@ interface InternalRoom {
   inviteSlots: InviteSlot[];
   gameState: GameState | null;
   sockets: Map<string, WebSocket>;
+  eventSeq: number;
+  events: RoomEvent[];
 }
 
 const rooms = new Map<string, InternalRoom>();
 const inviteCodeIndex = new Map<string, { roomCode: string; color: PlayerColor }>();
 const clientRoomMap = new Map<string, string>();
 const activeClients = new Map<string, WebSocket>();
+const httpClientLastSeen = new Map<string, number>();
+
+function getOnlinePlayersCount(): number {
+  const cutoff = Date.now() - 25_000;
+  const ids = new Set<string>(activeClients.keys());
+  for (const [cid, seenAt] of httpClientLastSeen.entries()) {
+    if (seenAt >= cutoff) ids.add(cid);
+    else httpClientLastSeen.delete(cid);
+  }
+  return Math.max(1, ids.size);
+}
+
+function recordRoomEvent(
+  room: InternalRoom,
+  type: RoomEvent['type'],
+  payload: Record<string, unknown>
+) {
+  room.eventSeq += 1;
+  room.events.push({ seq: room.eventSeq, type, payload });
+  if (room.events.length > 50) {
+    room.events.splice(0, room.events.length - 50);
+  }
+}
 
 const ALLOWED_EMOJIS = new Set(['👏', '😂', '🔥', '😎', '😭', '😡', '🎲', '🙏', '❤️', '⚡']);
 const CODE_WORDS = ['KING', 'GOLD', 'STAR', 'LUDO', 'CROWN', 'ROYAL', 'ACES', 'DICE', 'HERO', 'GEMS'];
@@ -144,7 +175,7 @@ function broadcastOnlineStats() {
     .reduce((sum, r) => sum + r.players.length, 0);
   const raw = JSON.stringify({
     type: 'online_stats',
-    onlinePlayers: activeClients.size,
+    onlinePlayers: getOnlinePlayersCount(),
     waitingGlobal,
   });
   for (const ws of activeClients.values()) {
@@ -167,7 +198,7 @@ function pickNextAvailableColor(players: OnlineRoomPlayer[], maxPlayers: 1 | 2 |
   return pool.find((c) => !taken.has(c)) || ALL_COLORS.find((c) => !taken.has(c)) || 'red';
 }
 
-function startRoomGame(room: InternalRoom, fillWithBots = false) {
+function startRoomGame(room: InternalRoom, fillWithBots = false): OnlineRoomSnapshot {
   const targetSize = room.maxPlayers === 1 ? 4 : room.maxPlayers;
   const pool = getSeatPoolForSize(targetSize);
   const configs: PlayerConfig[] = room.players.map((p) => ({
@@ -195,8 +226,11 @@ function startRoomGame(room: InternalRoom, fillWithBots = false) {
 
   room.status = 'playing';
   room.gameState = createInitialGameState(room.isGlobal ? 'online_global' : 'online_private', configs);
-  broadcastRoom(room, { type: 'game_started', room: toSnapshot(room) });
+  const snapshot = toSnapshot(room);
+  recordRoomEvent(room, 'game_started', { room: snapshot });
+  broadcastRoom(room, { type: 'game_started', room: snapshot });
   broadcastOnlineStats();
+  return snapshot;
 }
 
 function leaveCurrentRoom(clientId: string) {
@@ -220,7 +254,7 @@ function leaveCurrentRoom(clientId: string) {
     }
   }
 
-  if (room.players.length === 0 || room.sockets.size === 0) {
+  if (room.players.length === 0) {
     for (const slot of room.inviteSlots) {
       inviteCodeIndex.delete(slot.code);
     }
@@ -251,12 +285,331 @@ function leaveCurrentRoom(clientId: string) {
   broadcastOnlineStats();
 }
 
+function sanitizeClientId(raw: unknown): string {
+  const cleaned = String(raw || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 48);
+  return cleaned || `c-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
+function handleCreatePrivateRoom(
+  clientId: string,
+  rawName: unknown,
+  rawFriendCount: unknown,
+  ws?: WebSocket
+): OnlineRoomSnapshot {
+  leaveCurrentRoom(clientId);
+  const name = String(rawName || 'Host').trim().slice(0, 18) || 'Host';
+  const numFriends = Number(rawFriendCount ?? 3);
+  const friendCount = Math.max(1, Math.min(3, numFriends)) as 1 | 2 | 3;
+  const maxPlayers = (friendCount + 1) as 2 | 3 | 4;
+
+  const roomCode = generateUniqueCode();
+  const seatPool = getSeatPoolForSize(maxPlayers);
+  const hostColor = seatPool[0];
+  const friendColors = seatPool.slice(1);
+
+  const inviteSlots: InviteSlot[] = friendColors.map((color) => {
+    const slotCode = generateUniqueCode();
+    inviteCodeIndex.set(slotCode, { roomCode, color });
+    return {
+      code: slotCode,
+      color,
+      claimedByClientId: null,
+      claimedByName: null,
+    };
+  });
+
+  const sockets = new Map<string, WebSocket>();
+  if (ws) sockets.set(clientId, ws);
+
+  const room: InternalRoom = {
+    code: roomCode,
+    isGlobal: false,
+    maxPlayers,
+    hostId: clientId,
+    status: 'waiting',
+    players: [{ clientId, name, color: hostColor, ready: true }],
+    inviteSlots,
+    gameState: null,
+    sockets,
+    eventSeq: 0,
+    events: [],
+  };
+
+  rooms.set(roomCode, room);
+  clientRoomMap.set(clientId, roomCode);
+  const snapshot = toSnapshot(room);
+  if (ws) sendJson(ws, { type: 'room_joined', room: snapshot });
+  broadcastOnlineStats();
+  return snapshot;
+}
+
+function handleJoinPrivateRoom(
+  clientId: string,
+  rawCode: unknown,
+  rawName: unknown,
+  ws?: WebSocket
+): { ok: true; room: OnlineRoomSnapshot } | { ok: false; message: string } {
+  const inputCode = String(rawCode || '').trim().toUpperCase();
+  const name = String(rawName || 'Friend').trim().slice(0, 18) || 'Friend';
+
+  const indexedSlot = inviteCodeIndex.get(inputCode);
+  const room = indexedSlot ? rooms.get(indexedSlot.roomCode) : rooms.get(inputCode);
+
+  if (!room) {
+    return { ok: false, message: `Invite code "${inputCode}" not found.` };
+  }
+  if (room.status !== 'waiting') {
+    return { ok: false, message: 'This match has already started.' };
+  }
+  if (room.players.length >= room.maxPlayers) {
+    return { ok: false, message: 'This room is already full.' };
+  }
+
+  let assignedColor: PlayerColor;
+  if (indexedSlot) {
+    const slot = room.inviteSlots.find((s) => s.code === inputCode);
+    if (!slot) {
+      return { ok: false, message: `Invite code "${inputCode}" is invalid.` };
+    }
+    if (slot.claimedByClientId && slot.claimedByClientId !== clientId) {
+      return {
+        ok: false,
+        message: `Invite code "${inputCode}" was already used by ${slot.claimedByName}.`,
+      };
+    }
+    assignedColor = slot.color;
+    leaveCurrentRoom(clientId);
+    slot.claimedByClientId = clientId;
+    slot.claimedByName = name;
+  } else {
+    leaveCurrentRoom(clientId);
+    assignedColor = pickNextAvailableColor(room.players, room.maxPlayers);
+    const openSlot = room.inviteSlots.find((s) => s.color === assignedColor);
+    if (openSlot) {
+      openSlot.claimedByClientId = clientId;
+      openSlot.claimedByName = name;
+    }
+  }
+
+  room.players.push({ clientId, name, color: assignedColor, ready: true });
+  if (ws) room.sockets.set(clientId, ws);
+  clientRoomMap.set(clientId, room.code);
+
+  const snapshot = toSnapshot(room);
+  if (ws) sendJson(ws, { type: 'room_joined', room: snapshot });
+  broadcastRoom(room, {
+    type: 'room_updated',
+    room: snapshot,
+    notice: `${name} joined the room.`,
+  });
+  broadcastOnlineStats();
+  return { ok: true, room: snapshot };
+}
+
+function handleJoinGlobalRoom(
+  clientId: string,
+  rawName: unknown,
+  rawMaxPlayers: unknown,
+  ws?: WebSocket
+): OnlineRoomSnapshot {
+  leaveCurrentRoom(clientId);
+  const name = String(rawName || 'Player').trim().slice(0, 18) || 'Player';
+  const rawMax = Number(rawMaxPlayers ?? 4);
+  const maxPlayers = ([1, 2, 3, 4].includes(rawMax) ? rawMax : 4) as 1 | 2 | 3 | 4;
+
+  if (maxPlayers === 1) {
+    const code = `GLB-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+    const sockets = new Map<string, WebSocket>();
+    if (ws) sockets.set(clientId, ws);
+    const room: InternalRoom = {
+      code,
+      isGlobal: true,
+      maxPlayers: 1,
+      hostId: clientId,
+      status: 'waiting',
+      players: [{ clientId, name, color: 'red', ready: true }],
+      inviteSlots: [],
+      gameState: null,
+      sockets,
+      eventSeq: 0,
+      events: [],
+    };
+    rooms.set(code, room);
+    clientRoomMap.set(clientId, code);
+    if (ws) sendJson(ws, { type: 'room_joined', room: toSnapshot(room) });
+    return startRoomGame(room, true);
+  }
+
+  let targetRoom = Array.from(rooms.values()).find(
+    (r) =>
+      r.isGlobal &&
+      r.status === 'waiting' &&
+      r.maxPlayers === maxPlayers &&
+      r.players.length < r.maxPlayers
+  );
+
+  if (!targetRoom) {
+    const code = `GLB-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+    const sockets = new Map<string, WebSocket>();
+    if (ws) sockets.set(clientId, ws);
+    targetRoom = {
+      code,
+      isGlobal: true,
+      maxPlayers,
+      hostId: clientId,
+      status: 'waiting',
+      players: [{ clientId, name, color: 'red', ready: true }],
+      inviteSlots: [],
+      gameState: null,
+      sockets,
+      eventSeq: 0,
+      events: [],
+    };
+    rooms.set(code, targetRoom);
+    clientRoomMap.set(clientId, targetRoom.code);
+    const snapshot = toSnapshot(targetRoom);
+    if (ws) sendJson(ws, { type: 'room_joined', room: snapshot });
+    broadcastOnlineStats();
+    return snapshot;
+  }
+
+  const color = pickNextAvailableColor(targetRoom.players, targetRoom.maxPlayers);
+  targetRoom.players.push({ clientId, name, color, ready: true });
+  if (ws) targetRoom.sockets.set(clientId, ws);
+  clientRoomMap.set(clientId, targetRoom.code);
+
+  const snapshot = toSnapshot(targetRoom);
+  if (ws) sendJson(ws, { type: 'room_joined', room: snapshot });
+  broadcastRoom(targetRoom, {
+    type: 'room_updated',
+    room: snapshot,
+    notice: `${name} joined Global Match!`,
+  });
+
+  if (targetRoom.players.length >= targetRoom.maxPlayers) {
+    return startRoomGame(targetRoom, false);
+  }
+  broadcastOnlineStats();
+  return snapshot;
+}
+
+function handleStartRoomAction(
+  clientId: string,
+  fillWithBots: boolean
+): { ok: true; room: OnlineRoomSnapshot } | { ok: false; message: string } {
+  const code = clientRoomMap.get(clientId);
+  if (!code) return { ok: false, message: 'No active room found.' };
+  const room = rooms.get(code);
+  if (!room || room.status !== 'waiting') {
+    return { ok: false, message: 'Room already started or unavailable.' };
+  }
+  if (room.players.length < 2 && !fillWithBots) {
+    return { ok: false, message: 'Wait for friends to join or fill empty seats with AI.' };
+  }
+  const snapshot = startRoomGame(room, fillWithBots);
+  return { ok: true, room: snapshot };
+}
+
+function handleRollDiceAction(clientId: string): Record<string, unknown> | null {
+  const code = clientRoomMap.get(clientId);
+  if (!code) return null;
+  const room = rooms.get(code);
+  if (!room || !room.gameState || room.status !== 'playing') return null;
+
+  const currentColor = getCurrentPlayerColor(room.gameState);
+  const currentPlayer = room.gameState.players[currentColor];
+  if (!currentPlayer.isAI && currentPlayer.clientId !== clientId) return null;
+  if (room.gameState.turnPhase !== 'waiting_roll') return null;
+
+  const rolledValue = Math.floor(Math.random() * 6) + 1;
+  const nextState = applyDiceRoll(room.gameState, rolledValue);
+  room.gameState = nextState;
+
+  const payload = {
+    type: 'dice_rolled',
+    rolledValue,
+    color: currentColor,
+    gameState: nextState,
+  };
+  recordRoomEvent(room, 'dice_rolled', payload);
+  broadcastRoom(room, payload);
+  return { ...payload, seq: room.eventSeq };
+}
+
+function handleMoveTokenAction(clientId: string, rawTokenId: unknown): Record<string, unknown> | null {
+  const code = clientRoomMap.get(clientId);
+  if (!code) return null;
+  const room = rooms.get(code);
+  if (!room || !room.gameState || room.status !== 'playing') return null;
+
+  const currentColor = getCurrentPlayerColor(room.gameState);
+  const currentPlayer = room.gameState.players[currentColor];
+  if (!currentPlayer.isAI && currentPlayer.clientId !== clientId) return null;
+
+  const tokenId = Number(rawTokenId);
+  if (!room.gameState.validTokenIds.includes(tokenId)) return null;
+
+  const result = applyTokenMove(room.gameState, tokenId);
+  room.gameState = result.nextState;
+
+  if (result.gameFinished) {
+    room.status = 'finished';
+    const winnerColor = result.nextState.winners[0];
+    const participants = result.nextState.activeOrder.map((c) => ({
+      name: result.nextState.players[c].name,
+      color: c,
+      isWin: c === winnerColor,
+      captures: result.nextState.capturesCount[c] || 0,
+    }));
+    recordLeaderboardMatch(participants);
+  }
+
+  const payload = {
+    type: 'token_moved',
+    tokenId,
+    color: currentColor,
+    moveResult: result,
+    gameState: result.nextState,
+  };
+  recordRoomEvent(room, 'token_moved', payload);
+  broadcastRoom(room, payload);
+  return { ...payload, seq: room.eventSeq };
+}
+
+function handleEmojiChatAction(clientId: string, rawEmoji: unknown): EmojiChatMessage | null {
+  const code = clientRoomMap.get(clientId);
+  if (!code) return null;
+  const room = rooms.get(code);
+  if (!room) return null;
+  const emoji = String(rawEmoji || '');
+  if (!ALLOWED_EMOJIS.has(emoji)) return null;
+  const sender = room.players.find((p) => p.clientId === clientId);
+  if (!sender) return null;
+
+  const chatMsg: EmojiChatMessage = {
+    id: `em-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    clientId,
+    color: sender.color,
+    name: sender.name,
+    emoji,
+    timestamp: Date.now(),
+  };
+  recordRoomEvent(room, 'emoji_chat', { message: chatMsg });
+  broadcastRoom(room, { type: 'emoji_chat', message: chatMsg });
+  return chatMsg;
+}
+
 async function bootstrap() {
   const app = express();
   app.use(express.json());
 
-  app.get('/api/health', (_req, res) => {
-    res.json({ ok: true, onlinePlayers: activeClients.size });
+  app.get('/api/health', (req, res) => {
+    const rawCid = req.query.clientId;
+    if (rawCid) {
+      const cid = sanitizeClientId(rawCid);
+      httpClientLastSeen.set(cid, Date.now());
+    }
+    res.json({ ok: true, onlinePlayers: getOnlinePlayersCount() });
   });
 
   app.get('/api/leaderboard', (_req, res) => {
@@ -275,17 +628,134 @@ async function bootstrap() {
     res.json({ entries: getSortedLeaderboard() });
   });
 
+  // HTTP REST Multiplayer Endpoints (seamless fallback whenever WebSocket upgrades are blocked)
+  app.get('/api/rooms/state', (req, res) => {
+    const cid = sanitizeClientId(req.query.clientId);
+    const sinceSeq = Number(req.query.sinceSeq ?? 0);
+    httpClientLastSeen.set(cid, Date.now());
+    const code = clientRoomMap.get(cid);
+    const room = code ? rooms.get(code) : undefined;
+    res.json({
+      onlinePlayers: getOnlinePlayersCount(),
+      room: room ? toSnapshot(room) : null,
+      events: room ? room.events.filter((ev) => ev.seq > sinceSeq) : [],
+      eventSeq: room ? room.eventSeq : 0,
+    });
+  });
+
+  app.post('/api/rooms/create', (req, res) => {
+    const cid = sanitizeClientId(req.body?.clientId);
+    httpClientLastSeen.set(cid, Date.now());
+    const room = handleCreatePrivateRoom(cid, req.body?.name, req.body?.friendCount);
+    res.json({ room, onlinePlayers: getOnlinePlayersCount(), eventSeq: 0 });
+  });
+
+  app.post('/api/rooms/join', (req, res) => {
+    const cid = sanitizeClientId(req.body?.clientId);
+    httpClientLastSeen.set(cid, Date.now());
+    const result = handleJoinPrivateRoom(cid, req.body?.code, req.body?.name);
+    if (!result.ok) {
+      res.status(400).json({ error: result.message });
+      return;
+    }
+    const internal = rooms.get(result.room.code);
+    res.json({
+      room: result.room,
+      onlinePlayers: getOnlinePlayersCount(),
+      eventSeq: internal ? internal.eventSeq : 0,
+    });
+  });
+
+  app.post('/api/rooms/global', (req, res) => {
+    const cid = sanitizeClientId(req.body?.clientId);
+    httpClientLastSeen.set(cid, Date.now());
+    const room = handleJoinGlobalRoom(cid, req.body?.name, req.body?.maxPlayers);
+    const internal = rooms.get(room.code);
+    res.json({
+      room,
+      onlinePlayers: getOnlinePlayersCount(),
+      eventSeq: internal ? internal.eventSeq : 0,
+    });
+  });
+
+  app.post('/api/rooms/leave', (req, res) => {
+    const cid = sanitizeClientId(req.body?.clientId);
+    httpClientLastSeen.set(cid, Date.now());
+    leaveCurrentRoom(cid);
+    res.json({ ok: true, onlinePlayers: getOnlinePlayersCount() });
+  });
+
+  app.post('/api/rooms/start', (req, res) => {
+    const cid = sanitizeClientId(req.body?.clientId);
+    httpClientLastSeen.set(cid, Date.now());
+    const result = handleStartRoomAction(cid, Boolean(req.body?.fillWithBots));
+    if (!result.ok) {
+      res.status(400).json({ error: result.message });
+      return;
+    }
+    const internal = rooms.get(result.room.code);
+    res.json({
+      room: result.room,
+      eventSeq: internal ? internal.eventSeq : 0,
+    });
+  });
+
+  app.post('/api/rooms/roll', (req, res) => {
+    const cid = sanitizeClientId(req.body?.clientId);
+    httpClientLastSeen.set(cid, Date.now());
+    const result = handleRollDiceAction(cid);
+    if (!result) {
+      res.status(400).json({ error: 'Cannot roll dice right now.' });
+      return;
+    }
+    res.json(result);
+  });
+
+  app.post('/api/rooms/move', (req, res) => {
+    const cid = sanitizeClientId(req.body?.clientId);
+    httpClientLastSeen.set(cid, Date.now());
+    const result = handleMoveTokenAction(cid, req.body?.tokenId);
+    if (!result) {
+      res.status(400).json({ error: 'Invalid token move.' });
+      return;
+    }
+    res.json(result);
+  });
+
+  app.post('/api/rooms/emoji', (req, res) => {
+    const cid = sanitizeClientId(req.body?.clientId);
+    httpClientLastSeen.set(cid, Date.now());
+    const message = handleEmojiChatAction(cid, req.body?.emoji);
+    if (!message) {
+      res.status(400).json({ error: 'Unable to send emoji.' });
+      return;
+    }
+    res.json({ message });
+  });
+
   const httpServer = createHttpServer(app);
   const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
 
-  wss.on('connection', (ws) => {
-    const clientId = `c-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  wss.on('connection', (ws, req) => {
+    const reqUrl = new URL(req.url || '/ws', 'http://localhost');
+    const requestedCid = reqUrl.searchParams.get('clientId');
+    const clientId = sanitizeClientId(requestedCid);
+
     activeClients.set(clientId, ws);
+
+    // Re-attach socket if client already created/joined a room via HTTP
+    const existingCode = clientRoomMap.get(clientId);
+    if (existingCode) {
+      const existingRoom = rooms.get(existingCode);
+      if (existingRoom) {
+        existingRoom.sockets.set(clientId, ws);
+      }
+    }
 
     sendJson(ws, {
       type: 'connected',
       clientId,
-      onlinePlayers: activeClients.size,
+      onlinePlayers: getOnlinePlayersCount(),
     });
     broadcastOnlineStats();
 
@@ -300,269 +770,41 @@ async function bootstrap() {
       const type = String(msg.type || '');
 
       if (type === 'create_room') {
-        leaveCurrentRoom(clientId);
-        const name = String(msg.name || 'Host').trim().slice(0, 18) || 'Host';
-        const rawFriendCount = Number(msg.friendCount ?? 3);
-        const friendCount = Math.max(1, Math.min(3, rawFriendCount)) as 1 | 2 | 3;
-        const maxPlayers = (friendCount + 1) as 2 | 3 | 4;
-
-        const roomCode = generateUniqueCode();
-        const seatPool = getSeatPoolForSize(maxPlayers);
-        const hostColor = seatPool[0];
-        const friendColors = seatPool.slice(1);
-
-        const inviteSlots: InviteSlot[] = friendColors.map((color) => {
-          const slotCode = generateUniqueCode();
-          inviteCodeIndex.set(slotCode, { roomCode, color });
-          return {
-            code: slotCode,
-            color,
-            claimedByClientId: null,
-            claimedByName: null,
-          };
-        });
-
-        const room: InternalRoom = {
-          code: roomCode,
-          isGlobal: false,
-          maxPlayers,
-          hostId: clientId,
-          status: 'waiting',
-          players: [{ clientId, name, color: hostColor, ready: true }],
-          inviteSlots,
-          gameState: null,
-          sockets: new Map([[clientId, ws]]),
-        };
-
-        rooms.set(roomCode, room);
-        clientRoomMap.set(clientId, roomCode);
-        sendJson(ws, { type: 'room_joined', room: toSnapshot(room) });
-        broadcastOnlineStats();
+        handleCreatePrivateRoom(clientId, msg.name, msg.friendCount, ws);
       } else if (type === 'join_room') {
-        const inputCode = String(msg.code || '').trim().toUpperCase();
-        const name = String(msg.name || 'Friend').trim().slice(0, 18) || 'Friend';
-
-        // Match either an individual friend invite slot code OR fallback room code
-        const indexedSlot = inviteCodeIndex.get(inputCode);
-        const room = indexedSlot ? rooms.get(indexedSlot.roomCode) : rooms.get(inputCode);
-
-        if (!room) {
-          sendJson(ws, { type: 'room_error', message: `Invite code "${inputCode}" not found.` });
-          return;
+        const res = handleJoinPrivateRoom(clientId, msg.code, msg.name, ws);
+        if (!res.ok) {
+          sendJson(ws, { type: 'room_error', message: res.message });
         }
-        if (room.status !== 'waiting') {
-          sendJson(ws, { type: 'room_error', message: 'This match has already started.' });
-          return;
-        }
-        if (room.players.length >= room.maxPlayers) {
-          sendJson(ws, { type: 'room_error', message: 'This room is already full.' });
-          return;
-        }
-
-        let assignedColor: PlayerColor;
-        if (indexedSlot) {
-          const slot = room.inviteSlots.find((s) => s.code === inputCode);
-          if (!slot) {
-            sendJson(ws, { type: 'room_error', message: `Invite code "${inputCode}" is invalid.` });
-            return;
-          }
-          if (slot.claimedByClientId && slot.claimedByClientId !== clientId) {
-            sendJson(ws, {
-              type: 'room_error',
-              message: `Invite code "${inputCode}" was already used by ${slot.claimedByName}.`,
-            });
-            return;
-          }
-          assignedColor = slot.color;
-          leaveCurrentRoom(clientId);
-          slot.claimedByClientId = clientId;
-          slot.claimedByName = name;
-        } else {
-          leaveCurrentRoom(clientId);
-          assignedColor = pickNextAvailableColor(room.players, room.maxPlayers);
-          const openSlot = room.inviteSlots.find((s) => s.color === assignedColor);
-          if (openSlot) {
-            openSlot.claimedByClientId = clientId;
-            openSlot.claimedByName = name;
-          }
-        }
-
-        room.players.push({ clientId, name, color: assignedColor, ready: true });
-        room.sockets.set(clientId, ws);
-        clientRoomMap.set(clientId, room.code);
-
-        sendJson(ws, { type: 'room_joined', room: toSnapshot(room) });
-        broadcastRoom(room, {
-          type: 'room_updated',
-          room: toSnapshot(room),
-          notice: `${name} joined the room.`,
-        });
-        broadcastOnlineStats();
       } else if (type === 'join_global') {
-        leaveCurrentRoom(clientId);
-        const name = String(msg.name || 'Player').trim().slice(0, 18) || 'Player';
-        const rawMax = Number(msg.maxPlayers ?? 4);
-        const maxPlayers = ([1, 2, 3, 4].includes(rawMax) ? rawMax : 4) as 1 | 2 | 3 | 4;
-
-        // 1-Player Global Arena launches immediately with Arena AI opponents
-        if (maxPlayers === 1) {
-          const code = `GLB-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
-          const room: InternalRoom = {
-            code,
-            isGlobal: true,
-            maxPlayers: 1,
-            hostId: clientId,
-            status: 'waiting',
-            players: [{ clientId, name, color: 'red', ready: true }],
-            inviteSlots: [],
-            gameState: null,
-            sockets: new Map([[clientId, ws]]),
-          };
-          rooms.set(code, room);
-          clientRoomMap.set(clientId, code);
-          sendJson(ws, { type: 'room_joined', room: toSnapshot(room) });
-          startRoomGame(room, true);
-          return;
-        }
-
-        let targetRoom = Array.from(rooms.values()).find(
-          (r) =>
-            r.isGlobal &&
-            r.status === 'waiting' &&
-            r.maxPlayers === maxPlayers &&
-            r.players.length < r.maxPlayers
-        );
-
-        if (!targetRoom) {
-          const code = `GLB-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
-          targetRoom = {
-            code,
-            isGlobal: true,
-            maxPlayers,
-            hostId: clientId,
-            status: 'waiting',
-            players: [{ clientId, name, color: 'red', ready: true }],
-            inviteSlots: [],
-            gameState: null,
-            sockets: new Map([[clientId, ws]]),
-          };
-          rooms.set(code, targetRoom);
-          clientRoomMap.set(clientId, targetRoom.code);
-          sendJson(ws, { type: 'room_joined', room: toSnapshot(targetRoom) });
-        } else {
-          const color = pickNextAvailableColor(targetRoom.players, targetRoom.maxPlayers);
-          targetRoom.players.push({ clientId, name, color, ready: true });
-          targetRoom.sockets.set(clientId, ws);
-          clientRoomMap.set(clientId, targetRoom.code);
-          sendJson(ws, { type: 'room_joined', room: toSnapshot(targetRoom) });
-          broadcastRoom(targetRoom, {
-            type: 'room_updated',
-            room: toSnapshot(targetRoom),
-            notice: `${name} joined Global Match!`,
-          });
-
-          if (targetRoom.players.length >= targetRoom.maxPlayers) {
-            startRoomGame(targetRoom, false);
-          }
-        }
-        broadcastOnlineStats();
+        handleJoinGlobalRoom(clientId, msg.name, msg.maxPlayers, ws);
       } else if (type === 'leave_room') {
         leaveCurrentRoom(clientId);
       } else if (type === 'start_room_game') {
-        const code = clientRoomMap.get(clientId);
-        if (!code) return;
-        const room = rooms.get(code);
-        if (!room || room.status !== 'waiting') return;
-        const fillWithBots = Boolean(msg.fillWithBots);
-        if (room.players.length < 2 && !fillWithBots) {
-          sendJson(ws, { type: 'room_error', message: 'Wait for friends to join or fill empty seats with AI.' });
-          return;
+        const res = handleStartRoomAction(clientId, Boolean(msg.fillWithBots));
+        if (!res.ok) {
+          sendJson(ws, { type: 'room_error', message: res.message });
         }
-        startRoomGame(room, fillWithBots);
       } else if (type === 'emoji_chat') {
-        const code = clientRoomMap.get(clientId);
-        if (!code) return;
-        const room = rooms.get(code);
-        if (!room) return;
-        const emoji = String(msg.emoji || '');
-        if (!ALLOWED_EMOJIS.has(emoji)) return;
-        const sender = room.players.find((p) => p.clientId === clientId);
-        if (!sender) return;
-
-        const chatMsg: EmojiChatMessage = {
-          id: `em-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-          clientId,
-          color: sender.color,
-          name: sender.name,
-          emoji,
-          timestamp: Date.now(),
-        };
-        broadcastRoom(room, { type: 'emoji_chat', message: chatMsg });
+        handleEmojiChatAction(clientId, msg.emoji);
       } else if (type === 'roll_dice') {
-        const code = clientRoomMap.get(clientId);
-        if (!code) return;
-        const room = rooms.get(code);
-        if (!room || !room.gameState || room.status !== 'playing') return;
-
-        const currentColor = getCurrentPlayerColor(room.gameState);
-        const currentPlayer = room.gameState.players[currentColor];
-        if (!currentPlayer.isAI && currentPlayer.clientId !== clientId) {
-          return;
-        }
-        if (room.gameState.turnPhase !== 'waiting_roll') return;
-
-        const rolledValue = Math.floor(Math.random() * 6) + 1;
-        const nextState = applyDiceRoll(room.gameState, rolledValue);
-        room.gameState = nextState;
-
-        broadcastRoom(room, {
-          type: 'dice_rolled',
-          rolledValue,
-          color: currentColor,
-          gameState: nextState,
-        });
+        handleRollDiceAction(clientId);
       } else if (type === 'move_token') {
-        const code = clientRoomMap.get(clientId);
-        if (!code) return;
-        const room = rooms.get(code);
-        if (!room || !room.gameState || room.status !== 'playing') return;
-
-        const currentColor = getCurrentPlayerColor(room.gameState);
-        const currentPlayer = room.gameState.players[currentColor];
-        if (!currentPlayer.isAI && currentPlayer.clientId !== clientId) {
-          return;
-        }
-        const tokenId = Number(msg.tokenId);
-        if (!room.gameState.validTokenIds.includes(tokenId)) return;
-
-        const result = applyTokenMove(room.gameState, tokenId);
-        room.gameState = result.nextState;
-
-        if (result.gameFinished) {
-          room.status = 'finished';
-          const winnerColor = result.nextState.winners[0];
-          const participants = result.nextState.activeOrder.map((c) => ({
-            name: result.nextState.players[c].name,
-            color: c,
-            isWin: c === winnerColor,
-            captures: result.nextState.capturesCount[c] || 0,
-          }));
-          recordLeaderboardMatch(participants);
-        }
-
-        broadcastRoom(room, {
-          type: 'token_moved',
-          tokenId,
-          color: currentColor,
-          moveResult: result,
-          gameState: result.nextState,
-        });
+        handleMoveTokenAction(clientId, msg.tokenId);
       }
     });
 
     ws.on('close', () => {
       activeClients.delete(clientId);
-      leaveCurrentRoom(clientId);
+      // Only evict immediately if no recent HTTP heartbeat; HTTP polling clients stay in their room
+      const lastHttp = httpClientLastSeen.get(clientId) || 0;
+      if (Date.now() - lastHttp > 4000) {
+        leaveCurrentRoom(clientId);
+      } else {
+        const roomCode = clientRoomMap.get(clientId);
+        const room = roomCode ? rooms.get(roomCode) : undefined;
+        room?.sockets.delete(clientId);
+      }
       broadcastOnlineStats();
     });
   });
